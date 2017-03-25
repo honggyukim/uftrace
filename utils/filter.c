@@ -324,6 +324,9 @@ static int parse_spec(char *str, struct ftrace_arg_spec *arg, char *suffix)
 	case 'S':
 		fmt = ARG_FMT_STD_STRING;
 		break;
+	case 'V':
+		fmt = ARG_FMT_STD_VECTOR;
+		break;
 	default:
 		pr_use("unsupported argument type: %s\n", str);
 		return -1;

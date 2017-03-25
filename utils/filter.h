@@ -43,6 +43,7 @@ enum ftrace_arg_format {
 	ARG_FMT_CHAR,
 	ARG_FMT_FLOAT,
 	ARG_FMT_STD_STRING,
+	ARG_FMT_STD_VECTOR,
 };
 
 #define ARG_TYPE_INDEX  0
