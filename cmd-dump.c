@@ -321,6 +321,15 @@ static void pr_args(struct fstack_arguments *args)
 				pr_out("  args[%d] str: %s\n", i , buf);
 			size += 2;
 		}
+		else if (spec->fmt == ARG_FMT_STD_VECTOR) {
+			vecinfo_t v_raw_size = *(vecinfo_t*)ptr;
+			vecinfo_t v_capacity = *(vecinfo_t*)(ptr + sizeof(vecinfo_t));
+
+			pr_out("  args[%d] std::vector = { raw_size: %d, capacity: %d }\n",
+				i, v_raw_size, v_capacity);
+
+			size = sizeof(vecinfo_t) * 2;
+		}
 		else {
 			long long val = 0;
 
@@ -364,6 +373,15 @@ static void pr_retval(struct fstack_arguments *args)
 			else
 				pr_out("  retval[%d] str: %s\n", i , buf);
 			size += 2;
+		}
+		else if (spec->fmt == ARG_FMT_STD_VECTOR) {
+			vecinfo_t v_raw_size = *(vecinfo_t*)ptr;
+			vecinfo_t v_capacity = *(vecinfo_t*)(ptr + sizeof(vecinfo_t));
+
+			pr_out("  retval[%d] std::vector = { raw_size: %d, capacity: %d }\n",
+				i, v_raw_size, v_capacity);
+
+			size = sizeof(vecinfo_t) * 2;
 		}
 		else {
 			long long val = 0;

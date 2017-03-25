@@ -909,6 +909,9 @@ static int read_task_arg(struct ftrace_task_handle *task,
 
 		size = *(unsigned short *)(args->data + args->len);
 		args->len += 2;
+	} else if (spec->fmt == ARG_FMT_STD_VECTOR) {
+		/* v_raw_size + v_capacity */
+		size = sizeof(vecinfo_t) * 2;
 	}
 
 	args->data = xrealloc(args->data, args->len + size);
