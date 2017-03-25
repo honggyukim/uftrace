@@ -43,6 +43,7 @@ enum ftrace_arg_format {
 	ARG_FMT_CHAR,
 	ARG_FMT_FLOAT,
 	ARG_FMT_STD_STRING,
+	ARG_FMT_STD_VECTOR,
 };
 
 #define ARG_TYPE_INDEX  0
@@ -51,7 +52,7 @@ enum ftrace_arg_format {
 #define ARG_TYPE_STACK  3
 
 /* should match with ftrace_arg_format above */
-#define ARG_SPEC_CHARS  "diuxscf"
+#define ARG_SPEC_CHARS  "diuxscfSV"
 
 /**
  * ftrace_arg_spec contains arguments and return value info.

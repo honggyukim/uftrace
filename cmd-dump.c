@@ -321,6 +321,29 @@ static void pr_args(struct fstack_arguments *args)
 				pr_out("  args[%d] str: %s\n", i , buf);
 			size += 2;
 		}
+		else if (spec->fmt == ARG_FMT_STD_VECTOR) {
+			typedef int vector_type;
+			vector_type* buf;
+
+			size = *(unsigned short *)ptr;
+
+			unsigned short type_size = *(unsigned short *)(ptr + 2);
+
+			buf = xmalloc(size);
+			memcpy(buf, ptr + 4, size);
+
+			size_t vsize = size / sizeof(vector_type);
+			pr_out("  args[%d] vector(size_t %d) of length %d: {",
+				i, type_size, vsize);
+			for (unsigned j = 0; j < vsize; j++) {
+				pr_out("%d", buf[j]);
+				if (j + 1 < vsize)
+					pr_out(", ");
+			}
+			pr_out("}\n");
+			size += 4;
+			free(buf);
+		}
 		else {
 			long long val = 0;
 
@@ -364,6 +387,29 @@ static void pr_retval(struct fstack_arguments *args)
 			else
 				pr_out("  retval[%d] str: %s\n", i , buf);
 			size += 2;
+		}
+		else if (spec->fmt == ARG_FMT_STD_VECTOR) {
+			typedef int vector_type;
+			vector_type* buf;
+
+			size = *(unsigned short *)ptr;
+
+			unsigned short type_size = *(unsigned short *)(ptr + 2);
+
+			buf = xmalloc(size);
+			memcpy(buf, ptr + 4, size);
+
+			size_t vsize = size / sizeof(vector_type);
+			pr_out("  retval[%d] vector(size_t %d) of length %d: {",
+				i, type_size, vsize);
+			for (unsigned j = 0; j < vsize; j++) {
+				pr_out("%d", buf[j]);
+				if (j + 1 < vsize)
+					pr_out(", ");
+			}
+			pr_out("}\n");
+			size += 4;
+			free(buf);
 		}
 		else {
 			long long val = 0;

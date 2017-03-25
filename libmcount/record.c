@@ -290,6 +290,25 @@ static unsigned save_to_argbuf(void *argbuf, struct list_head *args_spec,
 			}
 			size = ALIGN(len + 2, 4);
 		}
+		else if (spec->fmt == ARG_FMT_STD_VECTOR) {
+			long *_M_start = ctx->val.p;
+			long *_M_finish = _M_start + 1;
+			long *iterator = _M_start;
+			unsigned short len = *_M_finish - *_M_start;
+
+			/* store 2-byte length */
+			*(unsigned short *)ptr = len;
+
+			/* store 2-byte size of type before vector array */
+			*(unsigned short *)(ptr + 2) = 4;
+			//*(unsigned short *)(ptr + 2) = (unsigned short)(spec->size);
+
+			/* start storing vector array to shared memory */
+			void *varray = (void*)(*iterator);
+			memcpy(ptr + 4, varray, (size_t)len);
+
+			size = ALIGN(len + 4, 4);
+		}
 		else {
 			memcpy(ptr, ctx->val.v, spec->size);
 			size = ALIGN(spec->size, 4);
@@ -321,7 +340,6 @@ void save_argument(struct mcount_thread_data *mtdp,
 		pr_log("argument data is too big\n");
 		return;
 	}
-
 	*(unsigned *)argbuf = size;
 	rstack->flags |= MCOUNT_FL_ARGUMENT;
 }

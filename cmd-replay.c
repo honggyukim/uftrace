@@ -571,6 +571,35 @@ void get_argspec_string(struct ftrace_task_handle *task,
 				break;
 			}
 		}
+		else if (spec->fmt == ARG_FMT_STD_VECTOR) {
+			unsigned short vlen;
+			unsigned short vsize;
+			unsigned int j;
+
+			typedef int vector_type;
+			vector_type* buf;
+			unsigned short type_size;
+
+			memcpy(&vlen, data, 2);
+			memcpy(&type_size, data + 2, 2);
+			vsize = vlen / type_size;
+
+			buf = xmalloc(vlen);
+			memcpy(buf, data + 4, vlen);
+
+			args[n++] = '{';
+			for (j = 0; j < vsize; j++) {
+				n += snprintf(args + n, len, "%d", buf[j]);
+				if (j + 1 < vsize) {
+					args[n++] = ',';
+					args[n++] = ' ';
+				}
+			}
+			args[n++] = '}';
+
+			free(buf);
+			size = vlen + 4;
+		}
 		else {
 			assert(idx < ARRAY_SIZE(len_mod));
 			lm = len_mod[idx];
