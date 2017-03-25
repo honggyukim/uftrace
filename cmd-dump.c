@@ -328,6 +328,26 @@ static void pr_args(struct fstack_arguments *args)
 				pr_out("  args[%d] str: %s\n", i , buf);
 			size += 2;
 		}
+		else if (spec->fmt == ARG_FMT_STD_VECTOR) {
+			typedef int vector_type;
+			vector_type* buf;
+
+			size = *(unsigned short *)ptr;
+
+			buf = xmalloc(size);
+			memcpy(buf, ptr + 2, size);
+
+			size_t vsize = size / sizeof(vector_type);
+			pr_out("  args[%d] vector of length %d: {", i , vsize);
+			for (unsigned j = 0; j < vsize; j++) {
+				pr_out("%d", buf[j]);
+				if (j + 1 < vsize)
+					pr_out(", ");
+			}
+			pr_out("}\n");
+			size += 2;
+			free(buf);
+		}
 		else {
 			long long val = 0;
 
