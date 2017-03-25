@@ -571,6 +571,18 @@ void get_argspec_string(struct ftrace_task_handle *task,
 				break;
 			}
 		}
+		else if (spec->fmt == ARG_FMT_STD_VECTOR) {
+			unsigned short v_raw_size;
+			unsigned short v_capacity;
+
+			memcpy(&v_raw_size, data, 2);
+			memcpy(&v_capacity, data + 2, 2);
+
+			n += snprintf(args + n, len,
+				"std::vector{raw_size: %d, capacity: %d}",
+				v_raw_size, v_capacity);
+			size = 4;
+		}
 		else {
 			assert(idx < ARRAY_SIZE(len_mod));
 			lm = len_mod[idx];

@@ -909,6 +909,9 @@ static int read_task_arg(struct ftrace_task_handle *task,
 
 		size = *(unsigned short *)(args->data + args->len);
 		args->len += 2;
+	} else if (spec->fmt == ARG_FMT_STD_VECTOR) {
+		/* raw_size + capacity */
+		size = 4;
 	}
 
 	args->data = xrealloc(args->data, args->len + size);

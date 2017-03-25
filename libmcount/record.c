@@ -290,6 +290,34 @@ static unsigned save_to_argbuf(void *argbuf, struct list_head *args_spec,
 			}
 			size = ALIGN(len + 2, 4);
 		}
+		else if (spec->fmt == ARG_FMT_STD_VECTOR) {
+			long *_M_start = ctx->val.p;
+			long *_M_finish = _M_start + 1;
+			long *_M_end_of_storage = _M_start + 2;
+
+			unsigned short v_raw_size = *_M_finish - *_M_start;
+
+			/* 'v_capacity' is the raw size of elements that the
+			 * container has currently allocated space for. */
+			unsigned short v_capacity = *_M_end_of_storage
+						    - *_M_start;
+
+			/* store 2-byte length */
+			*(unsigned short *)ptr = v_raw_size;
+
+			/* store 2-byte length */
+			*(unsigned short *)(ptr + 2) = v_capacity;
+#if 0
+			/* store 2-byte sizeof(T) in vector<T> */
+			unsigned short sizeof_value_type
+				= (unsigned short)(spec->size);
+			*(unsigned short *)(ptr + 4) = sizeof_value_type;
+
+			FIXME: adding a new field requires to modify the size in read_task_arg()
+#endif
+			/* 4 bytes for 2 fields */
+			size = 4;
+		}
 		else {
 			memcpy(ptr, ctx->val.v, spec->size);
 			size = ALIGN(spec->size, 4);
@@ -321,7 +349,6 @@ void save_argument(struct mcount_thread_data *mtdp,
 		pr_log("argument data is too big\n");
 		return;
 	}
-
 	*(unsigned *)argbuf = size;
 	rstack->flags |= MCOUNT_FL_ARGUMENT;
 }
