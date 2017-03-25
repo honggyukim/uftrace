@@ -505,4 +505,7 @@ struct uftrace_event {
 	char			*event;
 };
 
+/* field size of std::vector information to be recored */
+typedef unsigned int vecinfo_t;
+
 #endif /* __UFTRACE_H__ */

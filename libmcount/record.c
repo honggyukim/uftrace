@@ -291,6 +291,26 @@ static unsigned save_to_argbuf(void *argbuf, struct list_head *args_spec,
 			}
 			size = ALIGN(len + 2, 4);
 		}
+		else if (spec->fmt == ARG_FMT_STD_VECTOR) {
+			long *_M_start = ctx->val.p;
+			long *_M_finish = _M_start + 1;
+			long *_M_end_of_storage = _M_start + 2;
+
+			vecinfo_t v_raw_size = *_M_finish - *_M_start;
+
+			/* 'v_capacity' is the raw size of elements that the
+			 * container has currently allocated space for. */
+			vecinfo_t v_capacity = *_M_end_of_storage - *_M_start;
+
+			/* store 4-byte for raw size in bytes */
+			*(vecinfo_t*)ptr = v_raw_size;
+
+			/* store 4-byte for capacity in bytes */
+			*(vecinfo_t*)(ptr + sizeof(vecinfo_t)) = v_capacity;
+
+			/* 8 bytes are used for 2 fields */
+			size = sizeof(vecinfo_t) * 2;
+		}
 		else {
 			memcpy(ptr, ctx->val.v, spec->size);
 			size = ALIGN(spec->size, 4);
@@ -322,7 +342,6 @@ void save_argument(struct mcount_thread_data *mtdp,
 		pr_warn("argument data is too big\n");
 		return;
 	}
-
 	*(unsigned *)argbuf = size;
 	rstack->flags |= MCOUNT_FL_ARGUMENT;
 }
