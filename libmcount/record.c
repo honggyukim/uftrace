@@ -245,9 +245,18 @@ static unsigned save_to_argbuf(void *argbuf, struct list_head *args_spec,
 		else
 			mcount_arch_get_arg(ctx, spec);
 
-		if (spec->fmt == ARG_FMT_STR) {
+		if (spec->fmt == ARG_FMT_STR ||
+		    spec->fmt == ARG_FMT_STD_STRING) {
 			unsigned short len;
 			char *str = ctx->val.p;
+
+			if (spec->fmt == ARG_FMT_STD_STRING) {
+				long *base = ctx->val.p;
+				long *_M_string_length = base + 1;
+				char *_M_local_buf = (char*)(base + 2);
+				len = *_M_string_length;
+				str = _M_local_buf;
+			}
 
 			if (str) {
 				unsigned i;
