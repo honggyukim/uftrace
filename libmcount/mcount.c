@@ -58,6 +58,8 @@ static enum filter_mode mcount_filter_mode = FILTER_MODE_NONE;
 static struct rb_root mcount_triggers = RB_ROOT;
 #endif /* DISABLE_MCOUNT_FILTER */
 
+extern char *script_str;
+
 uint64_t mcount_gettime(void)
 {
 	struct timespec ts;
@@ -1062,6 +1064,7 @@ static void mcount_startup(void)
 	plthook_str = getenv("UFTRACE_PLTHOOK");
 	patch_str = getenv("UFTRACE_PATCH");
 	event_str = getenv("UFTRACE_EVENT");
+	script_str = getenv("UFTRACE_SCRIPT");
 
 	if (logfd_str) {
 		int fd = strtol(logfd_str, NULL, 0);
