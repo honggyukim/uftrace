@@ -22,7 +22,7 @@ _uftrace () {
 	--demangle)
 	    COMPREPLY=($(compgen -W "${demangle}" -- "${cur}"))
 	    ;;
-	-s|--sort)
+	--sort)
 	    COMPREPLY=($(compgen -W "${sort_key}" -- "${cur}"))
 	    ;;
 	*)
