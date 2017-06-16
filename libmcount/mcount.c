@@ -27,6 +27,8 @@
 #define PR_DOMAIN  DBG_MCOUNT
 
 #include "libmcount/mcount.h"
+#include "libmcount/script.h"
+#include "libmcount/pyhook.h"
 #include "mcount-arch.h"
 #include "utils/utils.h"
 #include "utils/symbol.h"
@@ -57,6 +59,12 @@ static enum filter_mode mcount_filter_mode = FILTER_MODE_NONE;
 
 static struct rb_root mcount_triggers = RB_ROOT;
 #endif /* DISABLE_MCOUNT_FILTER */
+
+/* script type */
+enum script_type_t {
+	SCRIPT_UNKNOWN = 0,
+	SCRIPT_PYTHON
+};
 
 uint64_t mcount_gettime(void)
 {
@@ -543,6 +551,10 @@ int mcount_entry(unsigned long *parent_loc, unsigned long child,
 	/* fixup the parent_loc in an arch-dependant way (if needed) */
 	parent_loc = mcount_arch_parent_location(&symtabs, parent_loc, child);
 
+	/* script hooking for function entry */
+	if (script_str)
+		script_uftrace_entry(child, *parent_loc);
+
 	rstack = &mtdp->rstack[mtdp->idx++];
 
 	rstack->depth      = mtdp->record_idx;
@@ -584,6 +596,10 @@ unsigned long mcount_exit(long *retval)
 
 	mtdp->idx--;
 	mtdp->recursion_guard = false;
+
+	/* script hooking for function exit */
+	if (script_str)
+		script_uftrace_exit(retaddr, retval);
 
 	return retaddr;
 }
@@ -659,6 +675,10 @@ static int cygprof_entry(unsigned long parent, unsigned long child)
 	if (filtered == FILTER_IN) {
 		rstack->start_time = mcount_gettime();
 		rstack->flags      = 0;
+
+		/* script hooking for function entry */
+		if (script_str)
+			script_uftrace_entry(child, mtdp->cygprof_dummy);
 	}
 	else {
 		rstack->start_time = 0;
@@ -694,8 +714,13 @@ static void cygprof_exit(unsigned long parent, unsigned long child)
 
 	rstack = &mtdp->rstack[mtdp->idx - 1];
 
-	if (!(rstack->flags & MCOUNT_FL_NORECORD))
+	if (!(rstack->flags & MCOUNT_FL_NORECORD)) {
 		rstack->end_time = mcount_gettime();
+
+		/* script hooking for function exit */
+		if (script_str)
+			script_uftrace_exit(rstack->parent_ip, NULL);
+	}
 
 	mcount_exit_filter_record(mtdp, rstack, NULL);
 
@@ -751,6 +776,10 @@ void xray_entry(unsigned long parent, unsigned long child,
 	if (filtered == FILTER_IN) {
 		rstack->start_time = mcount_gettime();
 		rstack->flags      = 0;
+
+		/* script hooking for function entry */
+		if (script_str)
+			script_uftrace_entry(child, mtdp->cygprof_dummy);
 	}
 	else {
 		rstack->start_time = 0;
@@ -782,8 +811,13 @@ void xray_exit(long *retval)
 
 	rstack = &mtdp->rstack[mtdp->idx - 1];
 
-	if (!(rstack->flags & MCOUNT_FL_NORECORD))
+	if (!(rstack->flags & MCOUNT_FL_NORECORD)) {
 		rstack->end_time = mcount_gettime();
+
+		/* script hooking for function exit */
+		if (script_str)
+			script_uftrace_exit(rstack->parent_ip, retval);
+	}
 
 	mcount_exit_filter_record(mtdp, rstack, retval);
 
@@ -949,6 +983,23 @@ void mcount_rstack_reset(void)
 
 static void mcount_hook_functions(void);
 
+static enum script_type_t get_script_type(const char *str)
+{
+	int len = strlen(str);
+	assert(len > 3);
+
+	/*
+	 * The given script will be detected by the file suffix.
+	 * As of now, it only handles ".py" suffix for python.
+	 */
+	if (str[len - 3] == '.') {
+		if (str[len - 2] == 'p' && str[len - 1] == 'y')
+			return SCRIPT_PYTHON;
+	}
+
+	return SCRIPT_UNKNOWN;
+}
+
 static void mcount_startup(void)
 {
 	char *pipefd_str;
@@ -996,6 +1047,7 @@ static void mcount_startup(void)
 	plthook_str = getenv("UFTRACE_PLTHOOK");
 	patch_str = getenv("UFTRACE_PATCH");
 	event_str = getenv("UFTRACE_EVENT");
+	script_str = getenv("UFTRACE_SCRIPT");
 
 	if (logfd_str) {
 		int fd = strtol(logfd_str, NULL, 0);
@@ -1105,6 +1157,16 @@ out:
 	pthread_atfork(atfork_prepare_handler, NULL, atfork_child_handler);
 
 	mcount_hook_functions();
+
+	if (script_str) {
+		switch (get_script_type(script_str)) {
+		case SCRIPT_PYTHON:
+			python_init(script_str);
+			break;
+		default:
+			script_str = NULL;
+		}
+	}
 
 #ifndef DISABLE_MCOUNT_FILTER
 	ftrace_cleanup_filter_module(&modules);

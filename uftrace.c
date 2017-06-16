@@ -142,6 +142,7 @@ static struct argp_option ftrace_options[] = {
 	{ "time-range", 'r', "TIME~TIME", 0, "Show output within the TIME(timestamp or elapsed time) range only" },
 	{ "patch", 'P', "FUNC", 0, "Apply dynamic patching for FUNCs" },
 	{ "event", 'E', "EVENT", 0, "Enable EVENT to save more information" },
+	{ "python", 'p', "PYFILE", 0, "Bind Python script to mcount entry and exit" },
 	{ 0 }
 };
 
@@ -438,6 +439,10 @@ static error_t parse_option(int key, char *arg, struct argp_state *state)
 
 	case 'E':
 		opts->event = opt_add_string(opts->event, arg);
+		break;
+
+	case 'p':
+		opts->script_file= arg;
 		break;
 
 	case OPT_flat:

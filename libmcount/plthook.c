@@ -11,6 +11,7 @@
 #define PR_DOMAIN  DBG_MCOUNT
 
 #include "libmcount/mcount.h"
+#include "libmcount/pyhook.h"
 #include "mcount-arch.h"
 #include "utils/filter.h"
 #include "utils/compiler.h"
@@ -574,7 +575,12 @@ unsigned long plthook_entry(unsigned long *ret_addr, unsigned long child_idx,
 	}
 
 	filtered = mcount_entry_filter_check(mtdp, sym->addr, &tr);
-	if (filtered != FILTER_IN) {
+	if (filtered == FILTER_IN) {
+		/* script hooking for function entry */
+		if (script_str)
+			script_uftrace_entry(child_ip, *ret_addr);
+	}
+	else {
 		/*
 		 * Skip recording but still hook the return address,
 		 * otherwise it cannot trace further invocations due to
@@ -681,8 +687,13 @@ again:
 		plthook_dynsym_addr[dyn_idx],
 		find_dynsym(&symtabs, dyn_idx)->name);
 
-	if (!(rstack->flags & MCOUNT_FL_NORECORD))
+	if (!(rstack->flags & MCOUNT_FL_NORECORD)) {
 		rstack->end_time = mcount_gettime();
+
+		/* script hooking for function exit */
+		if (script_str)
+			script_uftrace_exit(rstack->parent_ip, retval);
+	}
 
 	mcount_exit_filter_record(mtdp, rstack, retval);
 	update_pltgot(mtdp, dyn_idx);
