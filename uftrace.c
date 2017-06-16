@@ -57,6 +57,7 @@ enum options {
 	OPT_max_stack,
 	OPT_port,
 	OPT_nopager,
+	OPT_sort,
 	OPT_avg_total,
 	OPT_avg_self,
 	OPT_color,
@@ -113,7 +114,7 @@ static struct argp_option uftrace_options[] = {
 	{ "host", 'H', "HOST", 0, "Send trace data to HOST instead of write to file" },
 	{ "port", OPT_port, "PORT", 0, "Use PORT for network connection" },
 	{ "no-pager", OPT_nopager, 0, 0, "Do not use pager" },
-	{ "sort", 's', "KEY[,KEY,...]", 0, "Sort reported functions by KEYs" },
+	{ "sort", OPT_sort, "KEY[,KEY,...]", 0, "Sort reported functions by KEYs" },
 	{ "avg-total", OPT_avg_total, 0, 0, "Show average/min/max of total function time" },
 	{ "avg-self", OPT_avg_self, 0, 0, "Show average/min/max of self function time" },
 	{ "color", OPT_color, "SET", 0, "Use color for output: yes, no, auto" },
@@ -150,6 +151,7 @@ static struct argp_option uftrace_options[] = {
 	{ "run-cmd", OPT_run_cmd, "CMDLINE", 0, "Command line that want to execute after tracing data received" },
 	{ "opt-file", OPT_opt_file, "FILE", 0, "Read command-line options from FILE" },
 	{ "keep-pid", OPT_keep_pid, 0, 0, "Keep same pid during execution of traced program" },
+	{ "script", 's', "SCRIPT", 0, "Run the given SCRIPT in function entry and exit" },
 	{ 0 }
 };
 
@@ -407,10 +409,6 @@ static error_t parse_option(int key, char *arg, struct argp_state *state)
 		opts->host = arg;
 		break;
 
-	case 's':
-		opts->sort_keys = opt_add_string(opts->sort_keys, arg);
-		break;
-
 	case 't':
 		opts->threshold = parse_time(arg, 3);
 		if (opts->range.start || opts->range.stop) {
@@ -451,6 +449,10 @@ static error_t parse_option(int key, char *arg, struct argp_state *state)
 		}
 		else
 			opts->event = opt_add_string(opts->event, arg);
+		break;
+
+	case 's':
+		opts->script_file = arg;
 		break;
 
 	case OPT_flat:
@@ -512,6 +514,10 @@ static error_t parse_option(int key, char *arg, struct argp_state *state)
 
 	case OPT_nopager:
 		opts->use_pager = false;
+		break;
+
+	case OPT_sort:
+		opts->sort_keys = opt_add_string(opts->sort_keys, arg);
 		break;
 
 	case OPT_avg_total:
