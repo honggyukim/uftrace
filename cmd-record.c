@@ -263,6 +263,9 @@ static void setup_child_environ(struct opts *opts, int pfd)
 		setenv("LD_PRELOAD", buf, 1);
 
 	setenv("XRAY_OPTIONS", "patch_premain=false", 1);
+
+	if (opts->pyfile)
+		setenv("UFTRACE_PYTHON", opts->pyfile, 1);
 }
 
 static uint64_t calc_feat_mask(struct opts *opts)

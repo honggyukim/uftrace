@@ -27,6 +27,7 @@
 #define PR_DOMAIN  DBG_MCOUNT
 
 #include "libmcount/mcount.h"
+#include "libmcount/pyhook.h"
 #include "mcount-arch.h"
 #include "utils/utils.h"
 #include "utils/symbol.h"
@@ -543,6 +544,9 @@ int mcount_entry(unsigned long *parent_loc, unsigned long child,
 	/* fixup the parent_loc in an arch-dependant way (if needed) */
 	parent_loc = mcount_arch_parent_location(&symtabs, parent_loc, child);
 
+	/* python hooking for function entry */
+	python_mcount_entry(child, *parent_loc);
+
 	rstack = &mtdp->rstack[mtdp->idx++];
 
 	rstack->depth      = mtdp->record_idx;
@@ -584,6 +588,9 @@ unsigned long mcount_exit(long *retval)
 
 	mtdp->idx--;
 	mtdp->recursion_guard = false;
+
+	/* python hooking for function exit */
+	python_mcount_exit(retaddr, retval);
 
 	return retaddr;
 }
@@ -659,6 +666,9 @@ static int cygprof_entry(unsigned long parent, unsigned long child)
 	if (filtered == FILTER_IN) {
 		rstack->start_time = mcount_gettime();
 		rstack->flags      = 0;
+
+		/* python hooking for function entry */
+		python_mcount_entry(child, mtdp->cygprof_dummy);
 	}
 	else {
 		rstack->start_time = 0;
@@ -694,8 +704,12 @@ static void cygprof_exit(unsigned long parent, unsigned long child)
 
 	rstack = &mtdp->rstack[mtdp->idx - 1];
 
-	if (!(rstack->flags & MCOUNT_FL_NORECORD))
+	if (!(rstack->flags & MCOUNT_FL_NORECORD)) {
 		rstack->end_time = mcount_gettime();
+
+		/* python hooking for function exit */
+		python_mcount_exit(rstack->parent_ip, NULL);
+	}
 
 	mcount_exit_filter_record(mtdp, rstack, NULL);
 
@@ -751,6 +765,9 @@ void xray_entry(unsigned long parent, unsigned long child,
 	if (filtered == FILTER_IN) {
 		rstack->start_time = mcount_gettime();
 		rstack->flags      = 0;
+
+		/* python hooking for function entry */
+		python_mcount_entry(child, mtdp->cygprof_dummy);
 	}
 	else {
 		rstack->start_time = 0;
@@ -782,8 +799,12 @@ void xray_exit(long *retval)
 
 	rstack = &mtdp->rstack[mtdp->idx - 1];
 
-	if (!(rstack->flags & MCOUNT_FL_NORECORD))
+	if (!(rstack->flags & MCOUNT_FL_NORECORD)) {
 		rstack->end_time = mcount_gettime();
+
+		/* python hooking for function exit */
+		python_mcount_exit(rstack->parent_ip, retval);
+	}
 
 	mcount_exit_filter_record(mtdp, rstack, retval);
 
@@ -966,6 +987,7 @@ static void mcount_startup(void)
 	char *plthook_str;
 	char *patch_str;
 	char *event_str;
+	char *pyfile_str;
 	char *dirname;
 	struct stat statbuf;
 	LIST_HEAD(modules);
@@ -996,6 +1018,7 @@ static void mcount_startup(void)
 	plthook_str = getenv("UFTRACE_PLTHOOK");
 	patch_str = getenv("UFTRACE_PATCH");
 	event_str = getenv("UFTRACE_EVENT");
+	pyfile_str = getenv("UFTRACE_PYTHON");
 
 	if (logfd_str) {
 		int fd = strtol(logfd_str, NULL, 0);
@@ -1105,6 +1128,11 @@ out:
 	pthread_atfork(atfork_prepare_handler, NULL, atfork_child_handler);
 
 	mcount_hook_functions();
+
+	if (pyfile_str) {
+		pr_dbg("python_init(%s)\n", pyfile_str);
+		python_init(pyfile_str);
+	}
 
 #ifndef DISABLE_MCOUNT_FILTER
 	ftrace_cleanup_filter_module(&modules);
