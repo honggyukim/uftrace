@@ -249,4 +249,6 @@ char * strjoin(char *left, char *right, char *delim);
 char **parse_cmdline(char *cmd, int *argc);
 void free_parsed_cmdline(char **argv);
 
+char *absolute_dirname(const char *path, char *resolved_path);
+
 #endif /* __FTRACE_UTILS_H__ */
