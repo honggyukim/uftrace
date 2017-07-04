@@ -27,9 +27,9 @@
 #define PR_DOMAIN  DBG_MCOUNT
 
 #include "libmcount/mcount.h"
-#include "libmcount/script.h"
 #include "libmcount/pyhook.h"
 #include "mcount-arch.h"
+#include "utils/script.h"
 #include "utils/utils.h"
 #include "utils/symbol.h"
 #include "utils/filter.h"

@@ -693,6 +693,8 @@ static error_t parse_option(int key, char *arg, struct argp_state *state)
 			opts->mode = UFTRACE_MODE_DUMP;
 		else if (!strcmp("graph", arg))
 			opts->mode = UFTRACE_MODE_GRAPH;
+		else if (!strcmp("script", arg))
+			opts->mode = UFTRACE_MODE_SCRIPT;
 		else
 			return ARGP_ERR_UNKNOWN; /* almost same as fall through */
 		break;
@@ -871,6 +873,9 @@ int main(int argc, char *argv[])
 		break;
 	case UFTRACE_MODE_GRAPH:
 		ret = command_graph(argc, argv, &opts);
+		break;
+	case UFTRACE_MODE_SCRIPT:
+		ret = command_script(argc, argv, &opts);
 		break;
 	case UFTRACE_MODE_INVALID:
 		ret = 1;

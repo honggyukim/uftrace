@@ -8,7 +8,7 @@
 #ifndef PYHOOK_H
 #define PYHOOK_H
 
-#include "script.h"
+#include "utils/script.h"
 #include <python2.7/Python.h>
 
 int python_init(char *py_pathname);
