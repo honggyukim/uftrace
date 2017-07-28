@@ -8,6 +8,7 @@
 #ifndef SCRIPT_H
 #define SCRIPT_H
 
+#include <python2.7/Python.h>
 #include "libmcount/mcount.h"
 
 extern char *script_str;
@@ -22,5 +23,7 @@ extern int (*script_uftrace_data_entry)(struct ftrace_task_handle *task,
 extern int (*script_uftrace_data_exit)(struct ftrace_task_handle *task,
 				       struct uftrace_record *rstack,
 				       uint64_t total_time);
+
+int python_init(char *py_pathname);
 
 #endif

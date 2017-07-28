@@ -11,12 +11,14 @@
 #include "utils/filter.h"
 #include "utils/fstack.h"
 #include "utils/list.h"
+#include "utils/script.h"
 
 #include "libtraceevent/event-parse.h"
 
 
 
-#if 1
+#if 0
+#if 0
 #include <dlfcn.h>
 #include "utils/symbol.h"
 #include "utils/script.h"
@@ -122,6 +124,7 @@ static int import_python_module(char *py_pathname)
 
 	return 0;
 }
+#endif
 
 int python_uftrace_data_entry(struct ftrace_task_handle *task,
 			      struct uftrace_record *rstack)

@@ -11,10 +11,10 @@
 #define PR_DOMAIN  DBG_MCOUNT
 
 #include "libmcount/mcount.h"
-#include "libmcount/pyhook.h"
 #include "mcount-arch.h"
 #include "utils/filter.h"
 #include "utils/compiler.h"
+#include "utils/script.h"
 
 extern struct symtabs symtabs;
 
