@@ -476,7 +476,7 @@ void mcount_entry_filter_record(struct mcount_thread_data *mtdp,
 		/* script hooking for function entry */
 		if (script_str) {
 			rstack->tid = gettid(mtdp);
-			script_uftrace_entry(rstack);
+			script_uftrace_entry(rstack, NULL);
 		}
 
 #define FLAGS_TO_CHECK  (TRIGGER_FL_RECOVER | TRIGGER_FL_TRACE_ON | TRIGGER_FL_TRACE_OFF)
@@ -539,7 +539,7 @@ void mcount_exit_filter_record(struct mcount_thread_data *mtdp,
 		}
 		/* script hooking for function exit */
 		if (script_str)
-			script_uftrace_exit(rstack, retval);
+			script_uftrace_exit(rstack, NULL, retval);
 	}
 }
 
@@ -564,7 +564,7 @@ void mcount_entry_filter_record(struct mcount_thread_data *mtdp,
 	/* script hooking for function entry */
 	if (script_str) {
 		rstack->tid = gettid(mtdp);
-		script_uftrace_entry(rstack);
+		script_uftrace_entry(rstack, NULL);
 	}
 }
 
@@ -582,7 +582,7 @@ void mcount_exit_filter_record(struct mcount_thread_data *mtdp,
 
 	/* script hooking for function exit */
 	if (script_str)
-		script_uftrace_exit(rstack, retval);
+		script_uftrace_exit(rstack, NULL, retval);
 }
 
 #endif /* DISABLE_MCOUNT_FILTER */

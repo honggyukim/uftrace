@@ -119,7 +119,7 @@ static int import_python_module(char *py_pathname)
 
 #ifdef LIBMCOUNT
 
-int python_uftrace_entry(struct mcount_ret_stack *rstack)
+int python_uftrace_entry(struct mcount_ret_stack *rstack, char *symname)
 {
 	if (unlikely(!pFuncEntry))
 		return -1;
@@ -133,17 +133,22 @@ int python_uftrace_entry(struct mcount_ret_stack *rstack)
 	/* Entire arguments are passed into a single dictionary. */
 	PyObject *pDict = __PyDict_New();
 
+	/* Make a PyObject from symbol. */
+	PyObject *pSym;
+	if (symname) {
+		pSym  = __PyString_FromString(symname);
+	} else {
+		struct sym *sym = find_symtabs(&symtabs, entry_addr);
+		symname = symbol_getname(sym, entry_addr);
+		pSym  = __PyString_FromString(symname);
+		symbol_putname(sym, symname);
+	}
+
 	PyObject *pTid = __PyInt_FromLong(tid);
 	PyObject *pDepth = __PyInt_FromLong(depth);
 	PyObject *pStartTime = __PyLong_FromUnsignedLongLong(start_time);
 	PyObject *pEntryAddr = __PyInt_FromLong(entry_addr);
 	PyObject *pRetAddr = __PyInt_FromLong(ret_addr);
-
-	/* Get a symbol name from the address. */
-	struct sym *sym = find_symtabs(&symtabs, entry_addr);
-	char *symname = symbol_getname(sym, entry_addr);
-	PyObject *pSym  = __PyString_FromString(symname);
-	symbol_putname(sym, symname);
 
 	__PyDict_SetItemString(pDict, py_args_table[PY_ARG_TID], pTid);
 	__PyDict_SetItemString(pDict, py_args_table[PY_ARG_DEPTH], pDepth);
@@ -169,7 +174,9 @@ int python_uftrace_entry(struct mcount_ret_stack *rstack)
 	return 0;
 }
 
-int python_uftrace_exit(struct mcount_ret_stack *rstack, long *retval)
+int python_uftrace_exit(struct mcount_ret_stack *rstack,
+			char *symname,
+			long *retval)
 {
 	if (unlikely(!pFuncExit))
 		return -1;
@@ -184,17 +191,22 @@ int python_uftrace_exit(struct mcount_ret_stack *rstack, long *retval)
 	/* Entire arguments are passed into a single dictionary. */
 	PyObject *pDict = __PyDict_New();
 
+	/* Make a PyObject from symbol. */
+	PyObject *pSym;
+	if (symname) {
+		pSym  = __PyString_FromString(symname);
+	} else {
+		struct sym *sym = find_symtabs(&symtabs, entry_addr);
+		symname = symbol_getname(sym, entry_addr);
+		pSym  = __PyString_FromString(symname);
+		symbol_putname(sym, symname);
+	}
+
 	PyObject *pTid = __PyInt_FromLong(tid);
 	PyObject *pDepth = __PyInt_FromLong(depth);
 	PyObject *pStartTime = __PyLong_FromUnsignedLongLong(start_time);
 	PyObject *pEndTime = __PyLong_FromUnsignedLongLong(end_time);
 	PyObject *pRetAddr = __PyInt_FromLong(ret_addr);
-
-	/* Get a symbol name from the address. */
-	struct sym *sym = find_symtabs(&symtabs, entry_addr);
-	char *symname = symbol_getname(sym, entry_addr);
-	PyObject *pSym  = __PyString_FromString(symname);
-	symbol_putname(sym, symname);
 
 	__PyDict_SetItemString(pDict, py_args_table[PY_ARG_TID], pTid);
 	__PyDict_SetItemString(pDict, py_args_table[PY_ARG_DEPTH], pDepth);
@@ -228,7 +240,8 @@ int python_uftrace_exit(struct mcount_ret_stack *rstack, long *retval)
 #else /* LIBMCOUNT */
 
 int python_uftrace_data_entry(struct ftrace_task_handle *task,
-			      struct uftrace_record *rstack)
+			      struct uftrace_record *rstack,
+			      char *symname)
 {
 	if (unlikely(!pFuncEntry))
 		return -1;
@@ -241,17 +254,23 @@ int python_uftrace_data_entry(struct ftrace_task_handle *task,
 	/* Entire arguments are passed into a single dictionary. */
 	PyObject *pDict = __PyDict_New();
 
+	/* Make a PyObject from symbol. */
+	PyObject *pSym;
+	if (symname) {
+		pSym  = __PyString_FromString(symname);
+	} else {
+		struct symtabs *symtabs = &task->h->sessions.first->symtabs;
+		struct sym *sym = find_symtabs(symtabs, entry_addr);
+		symname = symbol_getname(sym, entry_addr);
+		pSym  = __PyString_FromString(symname);
+		symbol_putname(sym, symname);
+	}
+
 	PyObject *pTid = __PyInt_FromLong(tid);
 	PyObject *pDepth = __PyInt_FromLong(depth);
 	PyObject *pStartTime = __PyLong_FromUnsignedLongLong(start_time);
 	PyObject *pEntryAddr = __PyInt_FromLong(entry_addr);
 //	PyObject *pRetAddr = __PyInt_FromLong(ret_addr);
-
-	/* Get a symbol name from the address. */
-	struct sym *sym = find_symtabs(&task->h->sessions.first->symtabs, entry_addr);
-	char *symname = symbol_getname(sym, entry_addr);
-	PyObject *pSym  = __PyString_FromString(symname);
-	symbol_putname(sym, symname);
 
 	__PyDict_SetItemString(pDict, py_args_table[PY_ARG_TID], pTid);
 	__PyDict_SetItemString(pDict, py_args_table[PY_ARG_DEPTH], pDepth);
@@ -279,6 +298,7 @@ int python_uftrace_data_entry(struct ftrace_task_handle *task,
 
 int python_uftrace_data_exit(struct ftrace_task_handle *task,
 			     struct uftrace_record *rstack,
+			     char *symname,
 			     uint64_t total_time)
 {
 	if (unlikely(!pFuncExit))
@@ -291,6 +311,18 @@ int python_uftrace_data_exit(struct ftrace_task_handle *task,
 	/* Entire arguments are passed into a single dictionary. */
 	PyObject *pDict = __PyDict_New();
 
+	/* Make a PyObject from symbol. */
+	PyObject *pSym;
+	if (symname) {
+		pSym  = __PyString_FromString(symname);
+	} else {
+		struct symtabs *symtabs = &task->h->sessions.first->symtabs;
+		struct sym *sym = find_symtabs(symtabs, entry_addr);
+		symname = symbol_getname(sym, entry_addr);
+		pSym  = __PyString_FromString(symname);
+		symbol_putname(sym, symname);
+	}
+
 	PyObject *pTid = __PyInt_FromLong(tid);
 	PyObject *pDepth = __PyInt_FromLong(depth);
 
@@ -298,12 +330,6 @@ int python_uftrace_data_exit(struct ftrace_task_handle *task,
 	PyObject *pTotalTime = __PyLong_FromUnsignedLongLong(total_time);
 
 //	PyObject *pRetAddr = __PyInt_FromLong(ret_addr);
-
-	/* Get a symbol name from the address. */
-	struct sym *sym = find_symtabs(&task->h->sessions.first->symtabs, entry_addr);
-	char *symname = symbol_getname(sym, entry_addr);
-	PyObject *pSym  = __PyString_FromString(symname);
-	symbol_putname(sym, symname);
 
 	__PyDict_SetItemString(pDict, py_args_table[PY_ARG_TID], pTid);
 	__PyDict_SetItemString(pDict, py_args_table[PY_ARG_DEPTH], pDepth);
