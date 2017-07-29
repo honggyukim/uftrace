@@ -63,7 +63,7 @@ COMMON_CFLAGS += -W -Wall -Wno-unused-parameter -Wno-missing-field-initializers
 #
 UFTRACE_CFLAGS = $(COMMON_CFLAGS) $(CFLAGS_$@) $(CFLAGS_uftrace)
 TRACEEVENT_CFLAGS = $(COMMON_CFLAGS) $(CFLAGS_$@) $(CFLAGS_traceevent)
-LIB_CFLAGS = $(COMMON_CFLAGS) $(CFLAGS_$@) $(CFLAGS_lib) -fPIC -fvisibility=hidden
+LIB_CFLAGS = $(COMMON_CFLAGS) $(CFLAGS_$@) $(CFLAGS_lib) -DLIBMCOUNT -fPIC -fvisibility=hidden
 
 UFTRACE_LDFLAGS = $(COMMON_LDFLAGS) $(LDFLAGS_$@) $(LDFLAGS_uftrace)
 LIB_LDFLAGS = $(COMMON_LDFLAGS) $(LDFLAGS_$@) $(LDFLAGS_lib)
@@ -105,6 +105,7 @@ LIBMCOUNT_FAST_SINGLE_OBJS := $(patsubst $(objdir)/%.op,$(objdir)/%-fast-single.
 LIBMCOUNT_UTILS_SRCS += $(srcdir)/utils/symbol.c $(srcdir)/utils/debug.c
 LIBMCOUNT_UTILS_SRCS += $(srcdir)/utils/rbtree.c $(srcdir)/utils/filter.c
 LIBMCOUNT_UTILS_SRCS += $(srcdir)/utils/demangle.c $(srcdir)/utils/utils.c
+LIBMCOUNT_UTILS_SRCS += $(srcdir)/utils/script.c $(srcdir)/utils/script-python.c
 LIBMCOUNT_UTILS_OBJS := $(patsubst $(srcdir)/utils/%.c,$(objdir)/%.op,$(LIBMCOUNT_UTILS_SRCS))
 
 LIBMCOUNT_NOP_SRCS := $(srcdir)/libmcount/mcount-nop.c
