@@ -6,6 +6,12 @@
  * Released under the GPL v2.
  */
 
+#if !HAVE_LIBPYTHON2
+
+/* Do nothing if libpython2.7.so is not installed. */
+
+#else /* !HAVE_LIBPYTHON2 */
+
 #include <dlfcn.h>
 #include "utils/symbol.h"
 #include "utils/fstack.h"
@@ -437,3 +443,5 @@ int script_init_for_python(char *py_pathname)
 
 	return 0;
 }
+
+#endif /* !HAVE_LIBPYTHON2 */

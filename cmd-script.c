@@ -19,6 +19,15 @@
 
 #include "libtraceevent/event-parse.h"
 
+#if !HAVE_LIBPYTHON2
+
+int command_script(int argc, char *argv[], struct opts *opts)
+{
+	pr_warn("script command is not supported due to missing libpython2.7.so\n");
+	return 0;
+}
+
+#else /* !HAVE_LIBPYTHON2 */
 
 static int run_script_for_rstack(struct ftrace_file_handle *handle,
 				 struct ftrace_task_handle *task,
@@ -151,3 +160,5 @@ int command_script(int argc, char *argv[], struct opts *opts)
 
 	return ret;
 }
+
+#endif /* !HAVE_LIBPYTHON2 */

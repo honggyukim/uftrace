@@ -34,6 +34,8 @@ int (*script_uftrace_data_exit)(struct ftrace_task_handle *task,
 #endif /* LIBMCOUNT */
 
 
+#if HAVE_LIBPYTHON2
+
 static enum script_type_t get_script_type(const char *str)
 {
 	char *ext = strrchr(str, '.');
@@ -64,3 +66,13 @@ int script_init(char *script_pathname)
 
 	return 0;
 }
+
+#else /* HAVE_LIBPYTHON2 */
+
+int script_init(char *script_pathname)
+{
+	/* Do nothing if libpython2.7.so is not installed. */
+	return 0;
+}
+
+#endif /* HAVE_LIBPYTHON2 */
