@@ -115,6 +115,8 @@ static int set_python_path(char *py_pathname)
 	char *old_sysdir = getenv("PYTHONPATH");
 	char *new_sysdir = NULL;
 
+	pr_dbg("%s(%s)\n", __func__, py_pathname);
+
 	if (absolute_dirname(py_pathname, py_sysdir) == NULL)
 		return -1;
 
@@ -134,6 +136,8 @@ static int import_python_module(char *py_pathname)
 {
 	PyObject *pName;
 	char *py_basename = basename(py_pathname);
+
+	pr_dbg("%s(%s)\n", __func__, py_pathname);
 
 	remove_py_suffix(py_basename);
 
@@ -489,6 +493,8 @@ int python_uftrace_end(void)
 	if (unlikely(!pFuncEnd))
 		return -1;
 
+	pr_dbg("%s()\n", __func__);
+
 	/* Call python function "uftrace_end". */
 	__PyObject_CallObject(pFuncEnd, NULL);
 
@@ -497,7 +503,8 @@ int python_uftrace_end(void)
 
 int python_atfork_prepare(void)
 {
-	pr_dbg("flush python buffer");
+	pr_dbg("flush python buffer in %s()\n", __func__);
+
 	__PyRun_SimpleStringFlags("sys.stdout.flush()", NULL);
 
 	return 0;
@@ -505,7 +512,7 @@ int python_atfork_prepare(void)
 
 int script_init_for_python(char *py_pathname)
 {
-	pr_dbg("initialize python scripting engine for %s\n", py_pathname);
+	pr_dbg("%s(%s)\n", __func__, py_pathname);
 
 	/* Bind script_uftrace functions to python's. */
 	script_uftrace_entry = python_uftrace_entry;
@@ -610,6 +617,8 @@ int script_init_for_python(char *py_pathname)
 
 void script_finish_for_python(void)
 {
+	pr_dbg("%s()\n", __func__);
+
 	__Py_Finalize();
 }
 

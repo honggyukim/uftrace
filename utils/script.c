@@ -107,6 +107,7 @@ void script_finish_filter(void)
 
 int script_init(char *script_pathname)
 {
+	pr_dbg("%s(%s)\n", __func__, script_pathname);
 	if (access(script_pathname, F_OK) < 0) {
 		perror(script_pathname);
 		return -1;
