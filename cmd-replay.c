@@ -917,6 +917,45 @@ out:
 	return 0;
 }
 
+static int print_flat_rstack_raw(struct opts *opts, FILE *fp)
+{
+	struct uftrace_record rstack;
+
+	if (fread(&rstack, sizeof(rstack), 1, fp) != 1) {
+		if (feof(fp))
+			return -1;
+		return -1;
+	}
+
+	switch (rstack.type) {
+		case UFTRACE_ENTRY:
+			pr_out("%*s", rstack.depth * 2, "");
+			pr_out("<%" PRIx64 ">() {\n", rstack.addr);
+			break;
+
+		case UFTRACE_EXIT:
+			pr_out("%*s", rstack.depth * 2, "");
+			pr_out("} /* <%" PRIx64 "> */\n", rstack.addr);
+			break;
+	}
+
+	return 0;
+}
+
+static int read_all_raw_data(struct opts *opts)
+{
+	FILE *fp = fopen(opts->raw_data, "rb");
+
+	while (!feof(fp)) {
+		if (print_flat_rstack_raw(opts, fp) < 0)
+			break;
+	}
+
+	fclose(fp);
+
+	return 0;
+}
+
 static void print_warning(struct ftrace_task_handle *task)
 {
 	if (print_empty_field(&output_fields, 1))
@@ -1030,6 +1069,10 @@ int command_replay(int argc, char *argv[], struct opts *opts)
 
 	__fsetlocking(outfp, FSETLOCKING_BYCALLER);
 	__fsetlocking(logfp, FSETLOCKING_BYCALLER);
+
+	if (opts->raw_data) {
+		return read_all_raw_data(opts);
+	}
 
 	ret = open_data_file(opts, &handle);
 	if (ret < 0) {

@@ -86,6 +86,7 @@ enum options {
 	OPT_kernel_full,
 	OPT_kernel_only,
 	OPT_list_event,
+	OPT_raw,
 	OPT_run_cmd,
 	OPT_opt_file,
 	OPT_keep_pid,
@@ -107,6 +108,7 @@ static struct argp_option uftrace_options[] = {
 	{ "debug", 'v', 0, 0, "Print debug messages" },
 	{ "verbose", 'v', 0, 0, "Print verbose (debug) messages" },
 	{ "data", 'd', "DATA", 0, "Use this DATA instead of uftrace.data" },
+	{ "raw", OPT_raw, "DATFILE", 0, "Use a single raw DATA instead of uftrace.data" },
 	{ "flat", OPT_flat, 0, 0, "Use flat output format" },
 	{ "no-libcall", OPT_no_libcall, 0, 0, "Don't trace library function calls" },
 	{ "symbols", OPT_symbols, 0, 0, "Print symbol tables" },
@@ -575,6 +577,10 @@ static error_t parse_option(int key, char *arg, struct argp_state *state)
 
 	case OPT_dbg_domain:
 		parse_debug_domain(arg);
+		break;
+
+	case OPT_raw:
+		opts->raw_data = arg;
 		break;
 
 	case OPT_report:
