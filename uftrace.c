@@ -88,6 +88,7 @@ enum options {
 	OPT_kernel_full,
 	OPT_kernel_only,
 	OPT_list_event,
+	OPT_raw,
 	OPT_run_cmd,
 	OPT_opt_file,
 	OPT_keep_pid,
@@ -179,6 +180,7 @@ __used static const char uftrace_help[] =
 "      --port=PORT            Use PORT for network connection (default: "
 	stringify(UFTRACE_RECV_PORT) ")\n"
 "  -P, --patch=FUNC           Apply dynamic patching for FUNCs\n"
+"      --raw=DATFILE          Use a single raw DATA instead of uftrace.data\n"
 "      --record               Record a new trace data before running command\n"
 "      --report               Show live report\n"
 "      --rt-prio=PRIO         Record with real-time (FIFO) priority\n"
@@ -236,6 +238,7 @@ static const struct option uftrace_options[] = {
 	REQ_ARG(debug-domain, OPT_dbg_domain),
 	NO_ARG(force, OPT_force),
 	REQ_ARG(data, 'd'),
+	REQ_ARG(raw, OPT_raw),
 	NO_ARG(flat, OPT_flat),
 	NO_ARG(symbols, OPT_symbols),
 	REQ_ARG(buffer, 'b'),
@@ -255,6 +258,7 @@ static const struct option uftrace_options[] = {
 	REQ_ARG(color, OPT_color),
 	NO_ARG(disable, OPT_disabled),
 	REQ_ARG(demangle, OPT_demangle),
+	REQ_ARG(raw, OPT_raw),
 	NO_ARG(record, OPT_record),
 	NO_ARG(report, OPT_report),
 	NO_ARG(column-view, OPT_column_view),
@@ -781,6 +785,10 @@ static int parse_option(struct opts *opts, int key, char *arg)
 
 	case OPT_dbg_domain:
 		parse_debug_domain(arg);
+		break;
+
+	case OPT_raw:
+		opts->raw_data = arg;
 		break;
 
 	case OPT_report:
