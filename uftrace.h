@@ -205,6 +205,7 @@ struct opts {
 	char *sort_keys;
 	char *args;
 	char *retval;
+	char *raw_data;
 	char *diff;
 	char *fields;
 	char *patch;
