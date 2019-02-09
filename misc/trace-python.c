@@ -84,17 +84,41 @@ static void find_libmcount_funcs(void)
 	fclose(fp);
 }
 
+#if PY_MAJOR_VERSION >= 3
+static struct PyModuleDef moduledef = {
+	PyModuleDef_HEAD_INIT,
+	"trace_python",
+	"A Python module for uftrace.",
+	-1,
+	uftrace_methods
+};
+
+#define INITERROR return NULL
+
 /* the name should be 'init' + <module name> */
-PyMODINIT_FUNC inittrace_python(void)
+PyMODINIT_FUNC
+PyInit_trace_python(void)
+
+#else
+#define INITERROR return
+
+void
+inittrace_python(void)
+#endif
 {
 	PyObject *m, *d;
 
 	outfp = stdout;
 	logfp = stdout;
 
+#if PY_MAJOR_VERSION >= 3
+	Py_Initialize();
+	m = PyModule_Create(&moduledef);
+#else
 	m = Py_InitModule("trace_python", uftrace_methods);
+#endif
 	if (m == NULL)
-		return;
+		INITERROR;
 
 	d = PyModule_GetDict(m);
 
@@ -103,9 +127,13 @@ PyMODINIT_FUNC inittrace_python(void)
 
 	/* check if it's loaded in a uftrace session */
 	if (getenv("UFTRACE_SHMEM") == NULL)
-		return;
+		INITERROR;
 
 	find_libmcount_funcs();
+
+#if PY_MAJOR_VERSION >= 3
+	return m;
+#endif
 }
 
 static unsigned long find_function(struct rb_root *root, const char *name)
@@ -217,7 +245,19 @@ static unsigned long convert_function_addr(PyObject *frame)
 	if (name == NULL)
 		goto out;
 
+#if PY_MAJOR_VERSION >= 3
+	// https://stackoverflow.com/questions/22487780/what-do-i-use-instead-of-pystring-asstring-when-loading-a-python-module-in-3-3
+	if (PyUnicode_Check(name)) {
+		PyObject *temp_bytes = PyUnicode_AsEncodedString(name, "UTF-8", "strict");
+		if (temp_bytes != NULL) {
+			str_name = PyBytes_AS_STRING(temp_bytes);
+			str_name = xstrdup(str_name);
+			Py_DECREF(temp_bytes);
+		}
+	}
+#else
 	str_name = PyString_AsString(name);
+#endif
 	addr = find_function(&name_tree, str_name);
 
 out:
