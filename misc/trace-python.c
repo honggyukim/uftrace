@@ -247,15 +247,7 @@ static unsigned long convert_function_addr(PyObject *frame)
 		goto out;
 
 #if PY_MAJOR_VERSION >= 3
-	// https://stackoverflow.com/questions/22487780/what-do-i-use-instead-of-pystring-asstring-when-loading-a-python-module-in-3-3
-	if (PyUnicode_Check(name)) {
-		PyObject *temp_bytes = PyUnicode_AsEncodedString(name, "UTF-8", "strict");
-		if (temp_bytes != NULL) {
-			str_name = PyBytes_AS_STRING(temp_bytes);
-			str_name = xstrdup(str_name);
-			Py_DECREF(temp_bytes);
-		}
-	}
+	str_name = PyUnicode_AsUTF8(name);
 #else
 	str_name = PyString_AsString(name);
 #endif
