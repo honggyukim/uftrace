@@ -264,11 +264,19 @@ static unsigned long convert_function_addr(PyObject *frame)
 
 		if (global != NULL) {
 			PyObject *mod = PyDict_GetItemString(global, "__name__");
-
-			if (mod && PyString_Check(mod)) {
-				asprintf(&str_name, "<module:%s>", PyString_AsString(mod));
+#if PY_MAJOR_VERSION >= 3
+			if (mod && PyUnicode_Check(mod))
+			{
+				xasprintf(&str_name, "<module:%s>", PyUnicode_AsUTF8(mod));
 				needs_free = true;
 			}
+#else
+			if (mod && PyString_Check(mod))
+			{
+				xasprintf(&str_name, "<module:%s>", PyString_AsString(mod));
+				needs_free = true;
+			}
+#endif
 		}
 	}
 
