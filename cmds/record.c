@@ -2013,7 +2013,7 @@ int do_child_exec(int ready, struct opts *opts,
 		/* FIXME */
 		setenv("PYTHONPATH", PYTHON_DIR, 1);
 
-		execlp("python2", "python2", "-m", "uftrace", opts->exename, NULL);
+		execlp("python3", "python3", "-m", "uftrace", opts->exename, NULL);
 		abort();
 	}
 
