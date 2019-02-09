@@ -233,11 +233,13 @@ static void write_symtab(const char *dirname)
 
 static unsigned long convert_function_addr(PyObject *frame)
 {
-	PyObject *code, *name;
+	PyObject *code, *name, *filename;
 	char *str_name;
 	unsigned long addr = 0;
 	bool needs_free = false;
 
+	// filename = frame.f_code.co_filename
+	// lineno = frame.f_lineno
 	code = PyObject_GetAttrString(frame, "f_code");
 	if (code == NULL)
 		return 0;
@@ -245,7 +247,11 @@ static unsigned long convert_function_addr(PyObject *frame)
 	name = PyObject_GetAttrString(code, "co_name");
 	if (name == NULL)
 		goto out;
-
+#if 0
+	filename = PyObject_GetAttrString(code, "co_filename");
+	if (filename == NULL)
+		goto out;
+#endif
 #if PY_MAJOR_VERSION >= 3
 	str_name = PyUnicode_AsUTF8(name);
 #else
@@ -279,6 +285,7 @@ out:
 		free(str_name);
 	Py_XDECREF(code);
 	Py_XDECREF(name);
+//	Py_XDECREF(filename);
 	return addr;
 }
 
