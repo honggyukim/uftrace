@@ -208,7 +208,6 @@ static unsigned long convert_function_addr(PyObject *frame)
 	PyObject *code, *name;
 	char *str_name;
 	unsigned long addr = 0;
-	bool needs_free = false;
 
 	code = PyObject_GetAttrString(frame, "f_code");
 	if (code == NULL)
@@ -219,24 +218,9 @@ static unsigned long convert_function_addr(PyObject *frame)
 		goto out;
 
 	str_name = PyString_AsString(name);
-	if (!strcmp(str_name, "<module>")) {
-		PyObject *global = PyEval_GetGlobals();
-
-		if (global != NULL) {
-			PyObject *mod = PyDict_GetItemString(global, "__name__");
-
-			if (mod && PyString_Check(mod)) {
-				asprintf(&str_name, "<module:%s>", PyString_AsString(mod));
-				needs_free = true;
-			}
-		}
-	}
-
 	addr = find_function(&name_tree, str_name);
 
 out:
-	if (needs_free)
-		free(str_name);
 	Py_XDECREF(code);
 	Py_XDECREF(name);
 	return addr;
