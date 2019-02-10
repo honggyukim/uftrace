@@ -2013,7 +2013,18 @@ int do_child_exec(int ready, struct opts *opts,
 		/* FIXME */
 		setenv("PYTHONPATH", PYTHON_DIR, 1);
 
-		execlp("python3", "python3", "-m", "uftrace", opts->exename, NULL);
+		char *py_argv[argc + 4];
+		py_argv[0] = "python3";
+		py_argv[1] = "-m";
+		py_argv[2] = "uftrace";
+		py_argv[3] = opts->exename;
+		for (int i = 0; i < argc; i++)
+			py_argv[i + 4] = argv[i];
+
+		//execlp("python3", "python3", "-m", "uftrace", opts->exename, NULL);
+		//execlp("python3", "python3", "-m", "uftrace", opts->exename, "zip-native", NULL);
+		//execvp("python3", "python3", "-m", "uftrace", opts->exename, argv);
+		execvp("python3", py_argv);
 		abort();
 	}
 
