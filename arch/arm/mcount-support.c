@@ -296,7 +296,7 @@ int check_float_abi_cb(struct dl_phdr_info *info, size_t size, void *data)
 	for (i = 0; i < info->dlpi_phnum; i++) {
 		const Elf32_Phdr *phdr = info->dlpi_phdr + i;
 
-		if (phdr->p_type == PT_LOAD) {
+		if (phdr->p_type == PT_LOAD && phdr->p_vaddr) {
 			Elf32_Ehdr *ehdr = (void *)phdr->p_vaddr;
 			use_hard_float = ehdr->e_flags & EF_ARM_ABI_FLOAT_HARD;
 			break;
