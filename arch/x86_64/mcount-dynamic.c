@@ -10,7 +10,6 @@
 #include "utils/utils.h"
 #include "utils/symbol.h"
 
-#define PAGE_SIZE  4096
 #define XRAY_SECT  "xray_instr_map"
 
 /* target instrumentation function it needs to call */
@@ -37,6 +36,7 @@ int mcount_setup_trampoline(struct mcount_dynamic_info *mdi)
 	unsigned long xray_entry_addr = (unsigned long)__xray_entry;
 	unsigned long xray_exit_addr = (unsigned long)__xray_exit;
 	struct arch_dynamic_info *adi = mdi->arch;
+	unsigned long page_size = getpagesize();
 	size_t trampoline_size = 16;
 	void *trampoline_check;
 
@@ -44,17 +44,17 @@ int mcount_setup_trampoline(struct mcount_dynamic_info *mdi)
 		trampoline_size *= 2;
 
 	/* find unused 16-byte at the end of the code segment */
-	mdi->trampoline  = ALIGN(mdi->text_addr + mdi->text_size, PAGE_SIZE);
+	mdi->trampoline  = ALIGN(mdi->text_addr + mdi->text_size, page_size);
 	mdi->trampoline -= trampoline_size;
 
 	if (unlikely(mdi->trampoline < mdi->text_addr + mdi->text_size)) {
 		mdi->trampoline += trampoline_size;
-		mdi->text_size  += PAGE_SIZE;
+		mdi->text_size  += page_size;
 
 		pr_dbg2("adding a page for fentry trampoline at %#lx\n",
 			mdi->trampoline);
 
-		trampoline_check = mmap((void *)mdi->trampoline, PAGE_SIZE,
+		trampoline_check = mmap((void *)mdi->trampoline, page_size,
 					PROT_READ | PROT_WRITE,
 		     			MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS,
 					-1, 0);

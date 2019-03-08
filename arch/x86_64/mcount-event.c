@@ -11,8 +11,11 @@
 #include "libmcount/internal.h"
 
 #define INVALID_OPCODE  0xce
-#define PAGE_SIZE       4096
-#define PAGE_ADDR(a)    ((void *)((a) & ~(PAGE_SIZE - 1)))
+
+static inline void* get_page_addr(unsigned long addr, unsigned long page_size)
+{
+	return (void *)((addr) & ~(page_size - 1));
+}
 
 static void sdt_handler(int sig, siginfo_t *info, void *arg)
 {
@@ -33,6 +36,8 @@ static void sdt_handler(int sig, siginfo_t *info, void *arg)
 int mcount_arch_enable_event(struct mcount_event_info *mei)
 {
 	static bool sdt_handler_set = false;
+	unsigned long page_size = getpagesize();
+	void *mei_page_addr = get_page_addr(mei->addr, page_size);
 
 	if (!sdt_handler_set) {
 		struct sigaction act = {
@@ -46,7 +51,7 @@ int mcount_arch_enable_event(struct mcount_event_info *mei)
 		sdt_handler_set = true;
 	}
 
-	if (mprotect(PAGE_ADDR(mei->addr), PAGE_SIZE, PROT_READ | PROT_WRITE)) {
+	if (mprotect(mei_page_addr, page_size, PROT_READ | PROT_WRITE)) {
 		pr_dbg("cannot enable event due to protection: %m\n");
 		return -1;
 	}
@@ -54,7 +59,7 @@ int mcount_arch_enable_event(struct mcount_event_info *mei)
 	/* replace NOP to an invalid OP so that it can catch SIGILL */
 	memset((void *)mei->addr, INVALID_OPCODE, 1);
 
-	if (mprotect(PAGE_ADDR(mei->addr), PAGE_SIZE, PROT_EXEC))
+	if (mprotect(mei_page_addr, page_size, PROT_EXEC))
 		pr_err("cannot setup event due to protection");
 
 	return 0;

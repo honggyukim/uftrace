@@ -10,8 +10,6 @@
 #include "utils/utils.h"
 #include "utils/symbol.h"
 
-#define PAGE_SIZE  4096
-
 /* target instrumentation function it needs to call */
 extern void __fentry__(void);
 
@@ -19,20 +17,21 @@ int mcount_setup_trampoline(struct mcount_dynamic_info *mdi)
 {
 	unsigned char trampoline[] = { 0xe8, 0x00, 0x00, 0x00, 0x00, 0x58, 0xff, 0x60, 0x04 };
 	unsigned long fentry_addr = (unsigned long)__fentry__;
+	unsigned long page_size = getpagesize();
 	size_t trampoline_size = 16;
 	void *trampoline_check;
 
 	/* find unused 16-byte at the end of the code segment */
-	mdi->trampoline = ALIGN(mdi->text_addr + mdi->text_size, PAGE_SIZE) - trampoline_size;
+	mdi->trampoline = ALIGN(mdi->text_addr + mdi->text_size, page_size) - trampoline_size;
 
 	if (unlikely(mdi->trampoline < mdi->text_addr + mdi->text_size)) {
 		mdi->trampoline += trampoline_size;
-		mdi->text_size += PAGE_SIZE;
+		mdi->text_size += page_size;
 
 		pr_dbg2("adding a page for fentry trampoline at %#lx\n",
 			mdi->trampoline);
 
-		trampoline_check = mmap((void *)mdi->trampoline, PAGE_SIZE,
+		trampoline_check = mmap((void *)mdi->trampoline, page_size,
 					PROT_READ | PROT_WRITE,
 		     			MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS,
 					-1, 0);
