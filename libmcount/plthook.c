@@ -456,6 +456,9 @@ static int setup_mod_plthook_data(struct dl_phdr_info *info, size_t sz, void *ar
 		"ld-linux-*.so.*",
 		"libdl.so.2",
 		"libdl-2.*.so",
+		/* additional misc libraries */
+		"libSegFault.so",
+		"libunwind*",
 	};
 	size_t k;
 	static bool exe_once = true;
