@@ -311,6 +311,9 @@ static void setup_child_environ(struct opts *opts, int argc, char *argv[])
 	if (opts->sig_trigger)
 		setenv("UFTRACE_SIGNAL", opts->sig_trigger, 1);
 
+	if (opts->trace_memory)
+		setenv("UFTRACE_TRACE_MEMORY", "1", 1);
+
 	if (argc > 0) {
 		char *args = NULL;
 		int i;

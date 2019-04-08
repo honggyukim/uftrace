@@ -68,6 +68,9 @@ bool kernel_pid_update;
 /* system page size */
 int page_size_in_kb;
 
+/* trace_memory is to trace memory allocation only */
+bool trace_memory;
+
 /* call depth to filter */
 static int __maybe_unused mcount_depth = MCOUNT_DEFAULT_DEPTH;
 
@@ -1611,6 +1614,7 @@ static __used void mcount_startup(void)
 	char *event_str;
 	char *dirname;
 	char *pattern_str;
+	char *trace_memory_str;
 	struct stat statbuf;
 	bool nest_libcall;
 	enum uftrace_pattern_type patt_type = PATT_REGEX;
@@ -1640,6 +1644,7 @@ static __used void mcount_startup(void)
 	script_str = getenv("UFTRACE_SCRIPT");
 	nest_libcall = !!getenv("UFTRACE_NEST_LIBCALL");
 	pattern_str = getenv("UFTRACE_PATTERN");
+	trace_memory_str = getenv("UFTRACE_TRACE_MEMORY");
 
 	page_size_in_kb = getpagesize() / KB;
 
@@ -1727,6 +1732,9 @@ static __used void mcount_startup(void)
 
 	if (plthook_str)
 		mcount_setup_plthook(mcount_exename, nest_libcall);
+
+	if (trace_memory_str)
+		trace_memory = true;
 
 	if (getenv("UFTRACE_KERNEL_PID_UPDATE"))
 		kernel_pid_update = true;

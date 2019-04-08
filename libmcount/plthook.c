@@ -27,6 +27,9 @@
 /* global symbol tables for libmcount */
 extern struct symtabs symtabs;
 
+/* trace_memory is to trace memory allocation only */
+extern bool trace_memory;
+
 /* address of dynamic linker's resolver routine (copied from GOT[2]) */
 unsigned long plthook_resolver_addr;	/* referenced by arch/.../plthook.S */
 
