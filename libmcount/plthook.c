@@ -329,6 +329,12 @@ static const char *skip_syms[] = {
 	"dlsym",
 };
 
+/* functions should add for tracing memory allocation */
+static const char *alloc_syms[] = {
+	"malloc",
+	"free",
+};
+
 static const char *setjmp_syms[] = {
 	"setjmp",
 	"_setjmp",
@@ -436,6 +442,8 @@ void setup_dynsym_indexes(struct plthook_data *pd)
 			    PLT_FL_EXCEPT);
 	build_special_funcs(pd, resolve_syms, ARRAY_SIZE(resolve_syms),
 			    PLT_FL_RESOLVE);
+	build_special_funcs(pd, alloc_syms, ARRAY_SIZE(alloc_syms),
+			    PLT_FL_TRACE_MEMORY);
 
 	/* built all table, now sorting */
 	qsort(pd->special_funcs, pd->nr_special, sizeof(*pd->special_funcs), idxsort);
@@ -762,6 +770,16 @@ unsigned long plthook_entry(unsigned long *ret_addr, unsigned long child_idx,
 		       sizeof(*func), idxfind);
 	if (func)
 		special_flag |= func->flags;
+
+	if (unlikely(trace_memory)) {
+		if (likely(!(special_flag & PLT_FL_TRACE_MEMORY))) {
+			unsigned long addr = pd->resolved_addr[child_idx];
+			int got_idx = child_idx + 3;
+			if (addr)
+				overwrite_pltgot(pd, got_idx, (void*)addr);
+			goto out;
+		}
+	}
 
 	if (unlikely(special_flag & PLT_FL_SKIP))
 		goto out;
