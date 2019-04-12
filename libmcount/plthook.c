@@ -861,7 +861,10 @@ unsigned long plthook_exit(long *retval)
 	unsigned long ret_addr = 0;
 
 	mtdp = get_thread_data();
-	assert(!check_thread_data(mtdp));
+	if (unlikely(check_thread_data(mtdp))) {
+		pr_err("[tid: %d] plthook_exit() fails to get mtdp (mtd_key: %d)\n",
+			syscall(SYS_gettid), mtd_key);
+	}
 
 	/*
 	 * it's only called when mcount_entry() was succeeded

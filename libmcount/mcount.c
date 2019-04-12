@@ -1669,7 +1669,8 @@ static __used void mcount_startup(void)
 	else
 		setup_color(COLOR_AUTO, NULL);
 
-	pr_dbg("initializing mcount library\n");
+	pr_dbg("[tid: %d] mcount_startup() initializes libmcount (mtd_key: %d)\n",
+		syscall(SYS_gettid), mtd_key);
 
 	dirname = getenv("UFTRACE_DIR");
 	if (dirname == NULL)
@@ -1748,11 +1749,22 @@ static __used void mcount_startup(void)
 
 static void mcount_cleanup(void)
 {
+	pr_dbg("[tid: %d] mcount_cleanup() is called (mtd_key: %d)\n",
+		syscall(SYS_gettid), mtd_key);
+
 	mcount_finish();
 	destroy_dynsym_indexes();
 
+	/*
+	 * FIXME: This mtd_key deletion sometimes makes other thread get crashed
+	 *        because they may try to get mtdp based on this mtd_key after
+	 *        being deleted.  Since this key deletion is not that important,
+	 *        it'd be better not to do it until we find a better solution.
+	 */
+#if 0
 	pthread_key_delete(mtd_key);
 	mtd_key = -1;
+#endif
 
 	mcount_filter_finish();
 
