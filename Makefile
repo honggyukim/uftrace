@@ -56,7 +56,7 @@ COMMON_CFLAGS += -iquote $(srcdir) -iquote $(objdir) -iquote $(srcdir)/arch/$(AR
 COMMON_LDFLAGS := -lrt -ldl -pthread -Wl,-z,noexecstack $(LDFLAGS)
 ifneq ($(elfdir),)
   COMMON_CFLAGS  += -I$(elfdir)/include
-  COMMON_LDFLAGS += -L$(elfdir)/lib
+  COMMON_LDFLAGS += -L$(elfdir)/lib -lelf -ldw
 endif
 
 COMMON_CFLAGS += -W -Wall -Wno-unused-parameter -Wno-missing-field-initializers

@@ -126,6 +126,11 @@ export CC CFLAGS LD LDFLAGS
 make -siC ${srcdir}/check-deps check-clean
 make -siC ${srcdir}/check-deps check-build
 
+if [ ! -z $with_elfutils ]; then
+    touch ${srcdir}/check-deps/have_libelf
+    touch ${srcdir}/check-deps/have_libdw
+fi
+
 for dep in $IGNORE; do
     TARGET=
     case "$dep" in
