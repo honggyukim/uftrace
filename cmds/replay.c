@@ -229,7 +229,10 @@ static void setup_default_field(struct list_head *fields, struct opts *opts)
 		else
 			add_field(fields, field_table[REPLAY_F_TIMESTAMP]);
 	}
-	add_field(fields, field_table[REPLAY_F_DURATION]);
+	if (opts->flat)
+		add_field(fields, field_table[REPLAY_F_ELAPSED]);
+	else
+		add_field(fields, field_table[REPLAY_F_DURATION]);
 	add_field(fields, field_table[REPLAY_F_TID]);
 }
 
@@ -379,6 +382,19 @@ static void print_event(struct uftrace_task_reader *task,
 	free(evt_name);
 }
 
+
+static void print_task_newline(int current_tid)
+{
+	if (prev_tid != -1 && current_tid != prev_tid) {
+		if (print_empty_field(&output_fields, 1))
+			pr_out(" | ");
+		pr_out("\n");
+	}
+
+	prev_tid = current_tid;
+}
+
+#if 0
 static int print_flat_rstack(struct uftrace_data *handle,
 			     struct uftrace_task_reader *task,
 			     struct opts *opts)
@@ -426,17 +442,264 @@ out:
 	symbol_putname(sym, name);
 	return 0;
 }
-
-static void print_task_newline(int current_tid)
+#else
+static int print_flat_rstack(struct uftrace_data *handle,
+			     struct uftrace_task_reader *task,
+			     struct opts *opts)
 {
-	if (prev_tid != -1 && current_tid != prev_tid) {
-		if (print_empty_field(&output_fields, 1))
-			pr_out(" | ");
-		pr_out("\n");
+	struct uftrace_record *rstack;
+	struct uftrace_session_link *sessions = &handle->sessions;
+	struct sym *sym = NULL;
+	enum argspec_string_bits str_mode = 0;
+	char *symname = NULL;
+	char args[1024];
+	char *libname = "";
+	struct uftrace_mmap *map = NULL;
+
+	if (task == NULL)
+		return 0;
+
+	rstack = task->rstack;
+	if (rstack->type == UFTRACE_LOST)
+		goto lost;
+
+	sym = task_find_sym(sessions, task, rstack);
+	symname = symbol_getname(sym, rstack->addr);
+
+	/* skip it if --no-libcall is given */
+	if (!opts->libcall && sym && sym->type == ST_PLT_FUNC)
+		goto out;
+
+	if (rstack->type == UFTRACE_ENTRY) {
+		if (symname[strlen(symname) - 1] != ')' || rstack->more)
+			str_mode |= NEEDS_PAREN;
 	}
 
-	prev_tid = current_tid;
+	task->timestamp_last = task->timestamp;
+	task->timestamp = rstack->time;
+
+	if (opts->libname && sym && sym->type == ST_PLT_FUNC) {
+		struct uftrace_session *s;
+
+		s = find_task_session(sessions, task->t, rstack->time);
+		if (s != NULL) {
+			map = find_symbol_map(&s->symtabs, symname);
+			if (map != NULL)
+				libname = basename(map->libname);
+		}
+	}
+
+	if (rstack->type == UFTRACE_ENTRY) {
+//		struct uftrace_task_reader *next = NULL;
+		struct fstack *fstack;
+//		int rstack_depth = rstack->depth;
+//		int depth;
+		struct uftrace_trigger tr = {
+			.flags = 0,
+		};
+		int ret;
+
+		ret = fstack_entry(task, rstack, &tr);
+		if (ret < 0)
+			goto out;
+
+		/* display depth is set in fstack_entry() */
+//		depth = task->display_depth;
+
+		/* give a new line when tid is changed */
+		if (opts->task_newline)
+			print_task_newline(task->tid);
+
+		if (tr.flags & TRIGGER_FL_COLOR)
+			task->event_color = tr.color;
+		else
+			task->event_color = DEFAULT_EVENT_COLOR;
+
+//		depth += task_column_depth(task, opts);
+
+		if (rstack->more)
+			str_mode |= HAS_MORE;
+		get_argspec_string(task, args, sizeof(args), str_mode);
+
+		fstack = &task->func_stack[task->stack_count - 1];
+
+#if 0
+		if (!opts->no_merge)
+			next = fstack_skip(handle, task, rstack_depth, opts);
+
+		if (task == next &&
+		    next->rstack->depth == rstack_depth &&
+		    next->rstack->type == UFTRACE_EXIT) {
+			char retval[1024];
+
+			/* leaf function - also consume return record */
+			fstack_consume(handle, next);
+
+			str_mode = IS_RETVAL | NEEDS_SEMI_COLON;
+			if (next->rstack->more) {
+				str_mode |= HAS_MORE;
+				str_mode |= NEEDS_ASSIGNMENT;
+			}
+			get_argspec_string(task, retval, sizeof(retval), str_mode);
+
+			print_field(task, fstack, NULL);
+//			pr_out("%*s", depth * 2, "");
+			if (tr.flags & TRIGGER_FL_COLOR) {
+				pr_color(tr.color, "%s", symname);
+				if (*libname)
+					pr_color(tr.color, "@%s", libname);
+				pr_out("%s%s\n", args, retval);
+			}
+			else {
+				pr_out("%s%s%s%s%s\n", symname,
+				       *libname ? "@" : "",
+				       libname, args, retval);
+			}
+
+			/* fstack_update() is not needed here */
+
+			fstack_exit(task);
+		}
+		else {
+#endif
+			/* function entry */
+			print_field(task, fstack, NO_TIME);
+//			pr_out("%*s", depth * 2, "");
+			if (tr.flags & TRIGGER_FL_COLOR) {
+				pr_color(tr.color, "%s", symname);
+				if (*libname)
+					pr_color(tr.color, "@%s", libname);
+				pr_out("%s\n", args);
+			}
+			else {
+				pr_out("%s%s%s%s\n", symname,
+				       *libname ? "@" : "", libname, args);
+			}
+
+			fstack_update(UFTRACE_ENTRY, task, fstack);
+//		}
+	}
+	else if (rstack->type == UFTRACE_EXIT) {
+		struct fstack *fstack;
+
+		/* function exit */
+		fstack = &task->func_stack[task->stack_count];
+
+		if (!(fstack->flags & FSTACK_FL_NORECORD) && fstack_enabled) {
+//			int depth = fstack_update(UFTRACE_EXIT, task, fstack);
+			char *retval = args;
+
+//			depth += task_column_depth(task, opts);
+
+			str_mode = IS_RETVAL;
+			if (rstack->more) {
+				str_mode |= HAS_MORE;
+//				str_mode |= NEEDS_ASSIGNMENT;
+//				str_mode |= NEEDS_SEMI_COLON;
+			}
+			get_argspec_string(task, retval, sizeof(args), str_mode);
+
+			/* give a new line when tid is changed */
+			if (opts->task_newline)
+				print_task_newline(task->tid);
+
+			print_field(task, fstack, NULL);
+#if 0
+			pr_out("%*s}%s", depth * 2, "", retval);
+			if (opts->comment)
+				pr_gray(" /* %s%s%s */\n", symname,
+					*libname ? "@" : "", libname);
+			else
+				pr_gray("\n");
+#else
+			pr_out("%s%s%s() returns %s\n", symname,
+				*libname ? "@" : "", libname, retval);
+#endif
+		}
+
+		fstack_exit(task);
+	}
+	else if (rstack->type == UFTRACE_LOST) {
+		int losts;
+lost:
+//		depth = task->display_depth + 1;
+		losts = (int)rstack->addr;
+
+		/* skip kernel lost messages outside of user functions */
+		if (opts->kernel_skip_out && task->user_stack_count == 0)
+			return 0;
+
+		/* give a new line when tid is changed */
+		if (opts->task_newline)
+			print_task_newline(task->tid);
+
+		print_field(task, NULL, NO_TIME);
+
+		if (losts > 0)
+			pr_red("/* LOST %d records!! */\n", losts);
+		else /* kernel sometimes have unknown count */
+			pr_red("/* LOST some records!! */\n");
+		return 0;
+	}
+	else if (rstack->type == UFTRACE_EVENT) {
+//		int depth;
+		struct fstack *fstack;
+		struct uftrace_task_reader *next = NULL;
+		struct uftrace_record rec = *rstack;
+		uint64_t evt_id = rstack->addr;
+
+//		depth = task->display_depth;
+
+		if (!fstack_check_filter(task))
+			goto out;
+
+		/* give a new line when tid is changed */
+		if (opts->task_newline)
+			print_task_newline(task->tid);
+
+//		depth += task_column_depth(task, opts);
+
+		/*
+		 * try to merge a subsequent sched-in event:
+		 * it might overwrite rstack - use (saved) rec for printing.
+		 */
+		if (evt_id == EVENT_ID_PERF_SCHED_OUT && !opts->no_merge)
+			next = fstack_skip(handle, task, 0, opts);
+
+		if (task == next &&
+		    next->rstack->addr == EVENT_ID_PERF_SCHED_IN) {
+			/* consume the matching sched-in record */
+			fstack_consume(handle, next);
+
+			rec.addr = sched_sym.addr;
+			evt_id = EVENT_ID_PERF_SCHED_IN;
+		}
+
+		/* show external data regardless of display depth */
+//		if (evt_id == EVENT_ID_EXTERN_DATA)
+//			depth = 0;
+
+		/* for sched-in to show schedule duration */
+		fstack = &task->func_stack[task->stack_count];
+
+		if (!(fstack->flags & FSTACK_FL_NORECORD) && fstack_enabled) {
+			if (evt_id == EVENT_ID_PERF_SCHED_IN &&
+			    fstack->total_time)
+				print_field(task, fstack, NULL);
+			else
+				print_field(task, NULL, NO_TIME);
+
+			pr_color(task->event_color, "/* ");
+			print_event(task, &rec, task->event_color);
+			pr_color(task->event_color, " */\n");
+		}
+
+	}
+out:
+	symbol_putname(sym, symname);
+	return 0;
 }
+#endif
 
 #define print_char(c)                                                   \
 ({ args[n] = c; n++; len--; })
@@ -1174,7 +1437,8 @@ int command_replay(int argc, char *argv[], struct opts *opts)
 			break;
 	}
 
-	print_remaining_stack(opts, &handle);
+	if (!opts->flat)
+		print_remaining_stack(opts, &handle);
 
 	close_data_file(opts, &handle);
 
