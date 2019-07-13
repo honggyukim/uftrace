@@ -818,6 +818,7 @@ static unsigned long __plthook_entry(unsigned long *ret_addr,
 	rstack->nr_events  = 0;
 	rstack->event_idx  = ARGBUF_SIZE;
 
+#if 0
 	if (unlikely(mcount_flat))
 		record_trace_data(mtdp, rstack, NULL);
 	else {
@@ -830,6 +831,19 @@ static unsigned long __plthook_entry(unsigned long *ret_addr,
 	}
 
 	mcount_entry_filter_record(mtdp, rstack, &tr, regs);
+#else
+	mcount_entry_filter_record(mtdp, rstack, &tr, regs);
+	if (unlikely(mcount_flat))
+		record_trace_data(mtdp, rstack, NULL);
+	else {
+		/* hijack the return address of child */
+		*ret_addr = (unsigned long)plthook_return;
+
+		/* restore return address of parent */
+		if (mcount_auto_recover)
+			mcount_auto_restore(mtdp);
+	}
+#endif
 
 	if (unlikely(special_flag)) {
 		/* force flush rstack on some special functions */

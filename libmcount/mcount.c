@@ -1245,8 +1245,13 @@ static int __mcount_entry(unsigned long *parent_loc, unsigned long child,
 	if (mcount_auto_recover)
 		mcount_auto_restore(mtdp);
 #else
-	if (unlikely(mcount_flat))
+	mcount_entry_filter_record(mtdp, rstack, &tr, regs);
+
+	if (unlikely(mcount_flat)) {
+		/* write record data without hijacking return address */
+//		mcount_entry_filter_record(mtdp, rstack, &tr, regs);
 		record_trace_data(mtdp, rstack, NULL);
+	}
 	else {
 		/* hijack the return address of child */
 		*parent_loc = mcount_return_fn;
@@ -1254,10 +1259,11 @@ static int __mcount_entry(unsigned long *parent_loc, unsigned long child,
 		/* restore return address of parent */
 		if (mcount_auto_recover)
 			mcount_auto_restore(mtdp);
+
+//		mcount_entry_filter_record(mtdp, rstack, &tr, regs);
 	}
 #endif
 
-	mcount_entry_filter_record(mtdp, rstack, &tr, regs);
 	mcount_unguard_recursion(mtdp);
 	return 0;
 }

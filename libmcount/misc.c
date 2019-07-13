@@ -138,11 +138,16 @@ bool mcount_rstack_has_plthook(struct mcount_thread_data *mtdp)
 	return false;
 }
 
+extern bool mcount_flat;
+
 /* restore saved original return address */
 void mcount_rstack_restore(struct mcount_thread_data *mtdp)
 {
 	int idx;
 	struct mcount_ret_stack *rstack;
+
+	if (unlikely(mcount_flat))
+		return;
 
 	/* reverse order due to tail calls */
 	for (idx = mtdp->idx - 1; idx >= 0; idx--) {
