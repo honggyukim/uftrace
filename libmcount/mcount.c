@@ -44,6 +44,9 @@ int shmem_bufsize = SHMEM_BUFFER_SIZE;
 /* recover return address of parent automatically */
 bool mcount_auto_recover = ARCH_SUPPORT_AUTO_RECOVER;
 
+/* boolean flag to flat entry only recording */
+bool mcount_flat = false;
+
 /* global flag to control mcount behavior */
 unsigned long mcount_global_flags = MCOUNT_GFL_SETUP;
 
@@ -1258,14 +1261,35 @@ static int __mcount_entry(unsigned long *parent_loc, unsigned long child,
 	rstack->nr_events  = 0;
 	rstack->event_idx  = ARGBUF_SIZE;
 
+#if 0
 	/* hijack the return address of child */
 	*parent_loc = mcount_return_fn;
 
 	/* restore return address of parent */
 	if (mcount_auto_recover)
 		mcount_auto_restore(mtdp);
-
+#else
 	mcount_entry_filter_record(mtdp, rstack, &tr, regs);
+
+	if (unlikely(mcount_flat)) {
+		/* write record data without hijacking return address */
+//		mcount_entry_filter_record(mtdp, rstack, &tr, regs);
+		mtdp->idx = 0;
+		rstack->depth = 0;
+		record_trace_data(mtdp, rstack, NULL);
+	}
+	else {
+		/* hijack the return address of child */
+		*parent_loc = mcount_return_fn;
+
+		/* restore return address of parent */
+		if (mcount_auto_recover)
+			mcount_auto_restore(mtdp);
+
+//		mcount_entry_filter_record(mtdp, rstack, &tr, regs);
+	}
+#endif
+
 	mcount_unguard_recursion(mtdp);
 	return 0;
 }
@@ -1801,6 +1825,9 @@ static __used void mcount_startup(void)
 
 	if (getenv("UFTRACE_KERNEL_PID_UPDATE"))
 		kernel_pid_update = true;
+
+	if (getenv("UFTRACE_FLAT"))
+		mcount_flat = true;
 
 	pthread_atfork(atfork_prepare_handler, NULL, atfork_child_handler);
 

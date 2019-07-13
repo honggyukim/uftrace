@@ -37,6 +37,8 @@ static LIST_HEAD(plthook_modules);
 /* check getenv("LD_BIND_NOT") */
 static bool plthook_no_pltbind;
 
+extern bool mcount_flat;
+
 static void overwrite_pltgot(struct plthook_data *pd, int idx, void *data)
 {
 	/* overwrite it - might be write-protected */
@@ -818,14 +820,36 @@ static unsigned long __plthook_entry(unsigned long *ret_addr,
 	rstack->nr_events  = 0;
 	rstack->event_idx  = ARGBUF_SIZE;
 
-	/* hijack the return address of child */
-	*ret_addr = (unsigned long)plthook_return;
+#if 0
+	if (unlikely(mcount_flat))
+		record_trace_data(mtdp, rstack, NULL);
+	else {
+		/* hijack the return address of child */
+		*ret_addr = (unsigned long)plthook_return;
 
-	/* restore return address of parent */
-	if (mcount_auto_recover)
-		mcount_auto_restore(mtdp);
+		/* restore return address of parent */
+		if (mcount_auto_recover)
+			mcount_auto_restore(mtdp);
+	}
 
 	mcount_entry_filter_record(mtdp, rstack, &tr, regs);
+#else
+	mcount_entry_filter_record(mtdp, rstack, &tr, regs);
+	if (unlikely(mcount_flat)) {
+		/* write record data without hijacking return address */
+		mtdp->idx = 0;
+		rstack->depth = 0;
+		record_trace_data(mtdp, rstack, NULL);
+	}
+	else {
+		/* hijack the return address of child */
+		*ret_addr = (unsigned long)plthook_return;
+
+		/* restore return address of parent */
+		if (mcount_auto_recover)
+			mcount_auto_restore(mtdp);
+	}
+#endif
 
 	if (unlikely(special_flag)) {
 		/* force flush rstack on some special functions */
