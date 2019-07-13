@@ -1250,6 +1250,8 @@ static int __mcount_entry(unsigned long *parent_loc, unsigned long child,
 	if (unlikely(mcount_flat)) {
 		/* write record data without hijacking return address */
 //		mcount_entry_filter_record(mtdp, rstack, &tr, regs);
+		mtdp->idx = 0;
+		rstack->depth = 0;
 		record_trace_data(mtdp, rstack, NULL);
 	}
 	else {
