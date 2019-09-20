@@ -743,7 +743,10 @@ static struct display_field field_##_func = {			\
 static void print_##_func(struct field_data *fd)		\
 {								\
 	struct uftrace_report_node *node = fd->arg;		\
-	print_time_unit(node->_field);				\
+	if (fd->csv)						\
+		print_csv_time_unit(node->_field);		\
+	else							\
+		print_time_unit(node->_field);			\
 }								\
 FIELD_STRUCT(_id, _name, _func, _header, 10)
 
@@ -751,7 +754,10 @@ FIELD_STRUCT(_id, _name, _func, _header, 10)
 static void print_##_func(struct field_data *fd)		\
 {								\
 	struct uftrace_report_node *node = fd->arg;		\
-	pr_out("%10"PRIu64 "", node->_field);			\
+	if (fd->csv)						\
+		pr_out("%"PRIu64 "", node->_field);		\
+	else							\
+		pr_out("%10"PRIu64 "", node->_field);		\
 }								\
 FIELD_STRUCT(_id, _name, _func, _header, 10)
 

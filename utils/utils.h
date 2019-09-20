@@ -90,6 +90,7 @@ enum color_setting {
 enum format_mode {
 	FORMAT_NORMAL,
 	FORMAT_HTML,
+	FORMAT_CSV,
 };
 
 #define COLOR_CODE_NORMAL   '.'
@@ -338,6 +339,7 @@ int chown_directory(const char *dirname);
 char *read_exename(void);
 
 void print_time_unit(uint64_t delta_nsec);
+void print_csv_time_unit(uint64_t delta_nsec);
 void print_diff_percent(uint64_t base_nsec, uint64_t delta_nsec);
 void print_diff_time_unit(uint64_t base_nsec, uint64_t pair_nsec);
 void print_diff_count(uint64_t base, uint64_t pair);

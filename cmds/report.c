@@ -17,9 +17,10 @@ static int maxlen = 20;
 
 static LIST_HEAD(output_fields);
 
-static void print_field(struct uftrace_report_node *node, int space)
+static void print_field(struct uftrace_report_node *node, int space, bool csv)
 {
 	struct field_data fd = {
+		.csv = csv,
 		.arg = node,
 	};
 
@@ -205,9 +206,21 @@ static void print_and_delete(struct rb_root *root, bool sorted, void *arg,
 	}
 }
 
+static void print_csv_function(struct uftrace_report_node *node, void *unused, int space)
+{
+	print_field(node, space, true);
+
+	pr_out("%s", node->name);
+
+	if (node->loc)
+		pr_out(",%s:%d", node->loc->file->name, node->loc->line);
+
+	pr_out("\n");
+}
+
 static void print_function(struct uftrace_report_node *node, void *unused, int space)
 {
-	print_field(node, space);
+	print_field(node, space, false);
 
 	pr_out("%*s", space, " ");
 	pr_out("%-s", node->name);
@@ -251,16 +264,29 @@ static void report_functions(struct uftrace_data *handle, struct opts *opts)
 
 	setup_report_field(&output_fields, opts, avg_mode);
 
-	print_header_align(&output_fields, "  ", "Function", field_space,
-			   ALIGN_RIGHT, false);
-	if (!list_empty(&output_fields)) {
-		if (opts->srcline)
-			pr_gray(" [Source]");
-		pr_out("\n");
-	}
+	if (format_mode == FORMAT_CSV) {
+		print_header_align(&output_fields, "", "Function", 0,
+				   ALIGN_CSV, false);
+		if (!list_empty(&output_fields)) {
+			if (opts->srcline)
+				pr_out(",Source");
+			pr_out("\n");
+		}
 
-	print_line(&output_fields, field_space);
-	print_and_delete(&sort_root, true, NULL, print_function, field_space);
+		print_and_delete(&sort_root, true, NULL, print_csv_function, 0);
+	}
+	else {
+		print_header_align(&output_fields, "  ", "Function", field_space,
+				   ALIGN_RIGHT, false);
+		if (!list_empty(&output_fields)) {
+			if (opts->srcline)
+				pr_gray(" [Source]");
+			pr_out("\n");
+		}
+
+		print_line(&output_fields, field_space);
+		print_and_delete(&sort_root, true, NULL, print_function, field_space);
+	}
 }
 
 static void add_remaining_task_fstack(struct uftrace_data *handle,
@@ -347,7 +373,7 @@ static void print_task(struct uftrace_report_node *node, void *arg, int space)
 	pid = strtol(node->name, NULL, 10);
 	t = find_task(&handle->sessions, pid);
 
-	print_field(node, space);
+	print_field(node, space, false);
 
 	pr_out("%*s", space, " ");
 	pr_out("%-16s\n", t->comm);

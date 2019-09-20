@@ -7,12 +7,14 @@
 enum align_pos {
 	ALIGN_LEFT,
 	ALIGN_RIGHT,
+	ALIGN_CSV,
 };
 
 /* data for field display */
 struct field_data {
 	struct uftrace_task_reader *task;
 	struct fstack *fstack;
+	bool csv;
 	void *arg;
 };
 

@@ -831,6 +831,8 @@ static int parse_option(struct opts *opts, int key, char *arg)
 	case OPT_format:
 		if (!strcmp(arg, "html"))
 			format_mode = FORMAT_HTML;
+		else if (!strcmp(arg, "csv"))
+			format_mode = FORMAT_CSV;
 		else
 			format_mode = FORMAT_NORMAL;
 		break;

@@ -35,6 +35,10 @@ void print_header_align(struct list_head *output_fields, const char *prefix,
 		return;
 
 	list_for_each_entry(field, output_fields, list) {
+		if (align == ALIGN_CSV) {
+			pr_out("%s,", field->header);
+			continue;
+		}
 		pr_out("%*s", space, first ? prefix : "");
 		if (align == ALIGN_LEFT)
 			pr_out("%-*s", field->length, field->header);
@@ -43,7 +47,8 @@ void print_header_align(struct list_head *output_fields, const char *prefix,
 		first = false;
 	}
 
-	pr_out("%*s", space, " ");
+	if (align != ALIGN_CSV)
+		pr_out("%*s", space, " ");
 	pr_out("%s", postfix);
 	if (new_line)
 		pr_out("\n");
@@ -58,8 +63,14 @@ int print_field_data(struct list_head *output_fields, struct field_data *fd,
 		return 0;
 
 	list_for_each_entry(field, output_fields, list) {
-		pr_out("%*s", space, "");
-		field->print(fd);
+		if (fd->csv) {
+			field->print(fd);
+			pr_out(",");
+		}
+		else {
+			pr_out("%*s", space, "");
+			field->print(fd);
+		}
 	}
 	return 1;
 }

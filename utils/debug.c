@@ -271,7 +271,7 @@ void __pr_color(char code, const char *fmt, ...)
 	color(ec, outfp);
 }
 
-static void __print_time_unit(int64_t delta_nsec, bool needs_sign)
+static void __print_time_unit(int64_t delta_nsec, bool needs_sign, bool csv)
 {
 	uint64_t delta = llabs(delta_nsec);
 	uint64_t delta_small = 0;
@@ -372,13 +372,22 @@ static void __print_time_unit(int64_t delta_nsec, bool needs_sign)
 		pr_out("%*s%s%"PRId64".%03"PRIu64"%s %s", indent, "",
 		       sign, delta, delta_small, ends, unit);
 	}
-	else
-		pr_out("%3"PRIu64".%03"PRIu64" %s", delta, delta_small, unit);
+	else {
+		if (csv)
+			pr_out("%"PRIu64".%"PRIu64" %s", delta, delta_small, unit);
+		else
+			pr_out("%3"PRIu64".%03"PRIu64" %s", delta, delta_small, unit);
+	}
 }
 
 void print_time_unit(uint64_t delta_nsec)
 {
-	__print_time_unit(delta_nsec, false);
+	__print_time_unit(delta_nsec, false, false);
+}
+
+void print_csv_time_unit(uint64_t delta_nsec)
+{
+	__print_time_unit(delta_nsec, false, true);
 }
 
 void print_diff_percent(uint64_t base_nsec, uint64_t pair_nsec)
@@ -420,7 +429,15 @@ void print_diff_time_unit(uint64_t base_nsec, uint64_t pair_nsec)
 	if (base_nsec == pair_nsec)
 		pr_out("%11s", "0 us");
 	else
-		__print_time_unit(pair_nsec - base_nsec, true);
+		__print_time_unit(pair_nsec - base_nsec, true, false);
+}
+
+void print_csv_diff_time_unit(uint64_t base_nsec, uint64_t pair_nsec)
+{
+	if (base_nsec == pair_nsec)
+		pr_out("%11s", "0 us");
+	else
+		__print_time_unit(pair_nsec - base_nsec, true, true);
 }
 
 void print_diff_count(uint64_t base, uint64_t pair)
