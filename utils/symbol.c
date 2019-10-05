@@ -792,8 +792,8 @@ void load_python_symtab(struct symtabs *symtabs)
 	memcpy(map->prot, "rwxp", 4);
 	strcpy(map->libname, "<python>");
 
-	load_module_symbol_file(&map->symtab, symfile, 0);
-	setup_debug_info(symfile, &map->dinfo, 0, false);
+	load_module_symbol_file(&map->mod->symtab, symfile, 0);
+	setup_debug_info(symfile, &map->mod->dinfo, 0, false);
 
 	/* add new map to symtabs */
 	map->next = symtabs->maps;
