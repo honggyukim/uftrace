@@ -1069,6 +1069,9 @@ static void release_debug_info(struct debug_info *dinfo)
 {
 	struct debug_file *df, *tmp;
 
+	if (!(dinfo && dinfo->files.next))
+		return;
+
 	free_debug_entry(&dinfo->args);
 	free_debug_entry(&dinfo->rets);
 	release_enum_def(&dinfo->enums);
