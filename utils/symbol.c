@@ -38,6 +38,8 @@ static struct rb_root modules = RB_ROOT;
 static int load_module_symbol_file(struct symtab *symtab, const char *symfile,
 				   uint64_t offset);
 
+static void load_module_symtab(struct symtabs *symtabs, struct uftrace_mmap *map);
+
 struct sym sched_sym = {
 	.addr = EVENT_ID_PERF_SCHED_BOTH,
 	.size = 1,
@@ -783,12 +785,11 @@ void load_python_symtab(struct symtabs *symtabs)
 	memcpy(map->prot, "rwxp", 4);
 	strcpy(map->libname, PYTHON_SYMTAB_NAME);
 
-	load_module_symbol_file(&map->symtab, symfile, 0);
-	setup_debug_info(symfile, &map->dinfo, 0, false);
-
 	/* add new map to symtabs */
 	map->next = symtabs->maps;
 	symtabs->maps = map;
+
+	load_module_symtab(symtabs, map);
 
 	free(symfile);
 }
