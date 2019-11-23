@@ -735,9 +735,9 @@ static bool print_task_node(struct uftrace_task *task,
 	print_time_unit(task->time.run);
 	pr_out("  ");
 	print_time_unit(task->time.run - task->time.idle);
-	pr_out(" : ");
+	pr_out("  [%6d] :", task->tid);
 	pr_indent(indent_mask, indent, true);
-	pr_out("[%d] %s\n", task->tid, name);
+	pr_out(" %s\n", name);
 
 	if (list_empty(&task->children))
 		return false;
@@ -764,7 +764,7 @@ static bool print_task_node(struct uftrace_task *task,
 		}
 
 		if (blank) {
-			pr_out(" %*s : ", 23, "");
+			pr_out(" %*s :", 33, "");
 			pr_indent(indent_mask, indent, false);
 			pr_out("\n");
 
@@ -794,7 +794,7 @@ static int graph_print_task(struct uftrace_data *handle)
 		return 0;
 
 	pr_out("========== TASK GRAPH ==========\n");
-	pr_out("# %10s  %10s : %s\n", "TOTAL-TIME", "SELF-TIME", "TASK");
+	pr_out("# %10s  %10s  %8s : %s\n", "TOTAL-TIME", "SELF-TIME", "   TID  ", "TASK-NAME");
 	indent_mask = xcalloc(handle->nr_tasks, sizeof(*indent_mask));
 	print_task_node(handle->sessions.first_task, NULL, indent_mask, 0);
 	free(indent_mask);
