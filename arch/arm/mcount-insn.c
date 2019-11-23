@@ -9,7 +9,7 @@
 
 void mcount_disasm_init(struct mcount_disasm_engine *disasm)
 {
-	if (cs_open(CS_ARCH_ARM64, CS_MODE_ARM, &disasm->engine) != CS_ERR_OK) {
+	if (cs_open(CS_ARCH_ARM, CS_MODE_ARM, &disasm->engine) != CS_ERR_OK) {
 		pr_dbg("failed to init Capstone disasm engine\n");
 		return;
 	}
@@ -27,7 +27,7 @@ void mcount_disasm_finish(struct mcount_disasm_engine *disasm)
 static int check_prologue(struct mcount_disasm_engine *disasm, cs_insn *insn)
 {
 	int i;
-	cs_arm64 *arm64;
+	cs_arm *arm;
 	cs_detail *detail;
 	bool branch = false;
 	int status = -1;
@@ -40,10 +40,10 @@ static int check_prologue(struct mcount_disasm_engine *disasm, cs_insn *insn)
 		return -1;
 
 	/* try to fix some PC-relative instructions */
-	if (insn->id == ARM64_INS_ADR || insn->id == ARM64_INS_ADRP)
+	if (insn->id == ARM_INS_ADR)
 		return 1;
 
-	if (insn->id == ARM64_INS_LDR && (insn->bytes[3] & 0x3b) == 0x18)
+	if (insn->id == ARM_INS_LDR && (insn->bytes[3] & 0x3b) == 0x18)
 		return -1;
 
 	detail = insn->detail;
@@ -67,24 +67,24 @@ static int check_prologue(struct mcount_disasm_engine *disasm, cs_insn *insn)
 
 	}
 
-	arm64 = &insn->detail->arm64;
+	arm = &insn->detail->arm;
 
-	if (!arm64->op_count)
+	if (!arm->op_count)
 		return 0;
 
-	for (i = 0; i < arm64->op_count; i++) {
-		cs_arm64_op *op = &arm64->operands[i];
+	for (i = 0; i < arm->op_count; i++) {
+		cs_arm_op *op = &arm->operands[i];
 
 		switch (op->type) {
-		case ARM64_OP_REG:
+		case ARM_OP_REG:
 			status = 0;
 			break;
-		case ARM64_OP_IMM:
+		case ARM_OP_IMM:
 			if (branch)
 				return -1;
 			status = 0;
 			break;
-		case ARM64_OP_MEM:
+		case ARM_OP_MEM:
 			status = 0;
 			break;
 		default:
@@ -100,7 +100,7 @@ static bool check_body(struct mcount_disasm_engine *disasm,
 		       struct mcount_disasm_info *info)
 {
 	int i;
-	cs_arm64 *arm64;
+	cs_arm *arm;
 	cs_detail *detail = insn->detail;
 	unsigned long target;
 	bool jump = false;
@@ -120,12 +120,12 @@ static bool check_body(struct mcount_disasm_engine *disasm,
 	if (!jump)
 		return true;
 
-	arm64 = &insn->detail->arm64;
-	for (i = 0; i < arm64->op_count; i++) {
-		cs_arm64_op *op = &arm64->operands[i];
+	arm = &insn->detail->arm;
+	for (i = 0; i < arm->op_count; i++) {
+		cs_arm_op *op = &arm->operands[i];
 
 		switch (op->type) {
-		case ARM64_OP_IMM:
+		case ARM_OP_IMM:
 			/* capstone seems already calculate target address */
 			target = op->imm;
 
@@ -142,10 +142,10 @@ static bool check_body(struct mcount_disasm_engine *disasm,
 							  target);
 			}
 			break;
-		case ARM64_OP_MEM:
+		case ARM_OP_MEM:
 			/* indirect jumps are not allowed */
 			return false;
-		case ARM64_OP_REG:
+		case ARM_OP_REG:
 			/*
 			 * WARN: it should be disallowed too, but many of functions
 			 * use branch with register so this would drop the success
@@ -162,20 +162,16 @@ static bool check_body(struct mcount_disasm_engine *disasm,
 
 static int opnd_reg(int capstone_reg)
 {
-	const uint8_t arm64_regs[] = {
-		ARM64_REG_X0,  ARM64_REG_X1,  ARM64_REG_X2,  ARM64_REG_X3,
-		ARM64_REG_X4,  ARM64_REG_X5,  ARM64_REG_X6,  ARM64_REG_X7,
-		ARM64_REG_X8,  ARM64_REG_X9,  ARM64_REG_X10, ARM64_REG_X11,
-		ARM64_REG_X12, ARM64_REG_X13, ARM64_REG_X14, ARM64_REG_X15,
-		ARM64_REG_X16, ARM64_REG_X17, ARM64_REG_X18, ARM64_REG_X19,
-		ARM64_REG_X20, ARM64_REG_X21, ARM64_REG_X22, ARM64_REG_X23,
-		ARM64_REG_X24, ARM64_REG_X25, ARM64_REG_X26, ARM64_REG_X27,
-		ARM64_REG_X28, ARM64_REG_X29, ARM64_REG_X30, ARM64_REG_NZCV,
+	const uint8_t arm_regs[] = {
+		ARM_REG_R0,  ARM_REG_R1,  ARM_REG_R2,  ARM_REG_R3,
+		ARM_REG_R4,  ARM_REG_R5,  ARM_REG_R6,  ARM_REG_R7,
+		ARM_REG_R8,  ARM_REG_R9,  ARM_REG_R10, ARM_REG_R11,
+		ARM_REG_R12, ARM_REG_APSR_NZCV,
 	};
 	size_t i;
 
-	for (i = 0; i < sizeof(arm64_regs); i++) {
-		if (capstone_reg == arm64_regs[i])
+	for (i = 0; i < sizeof(arm_regs); i++) {
+		if (capstone_reg == arm_regs[i])
 			return i;
 	}
 	return -1;
@@ -187,17 +183,17 @@ static bool modify_instruction(struct mcount_disasm_engine *disasm,
 			       cs_insn *insn, struct mcount_dynamic_info *mdi,
 			       struct mcount_disasm_info *info)
 {
-	if (insn->id == ARM64_INS_ADR || insn->id == ARM64_INS_ADRP) {
+	if (insn->id == ARM_INS_ADR) {
 		uint32_t ldr_insn = 0x580000c0;
 		uint64_t target_addr;
-		cs_arm64_op *op1 = &insn->detail->arm64.operands[0];
-		cs_arm64_op *op2 = &insn->detail->arm64.operands[1];
+		cs_arm_op *op1 = &insn->detail->arm.operands[0];
+		cs_arm_op *op2 = &insn->detail->arm.operands[1];
 
 		/* handle the first ADRP instruction only (for simplicity) */
 		if (info->copy_size != 0)
 			return false;
 
-		if (op1->type != ARM64_OP_REG || op2->type != ARM64_OP_IMM)
+		if (op1->type != ARM_OP_REG || op2->type != ARM_OP_IMM)
 			return false;
 
 		/*
