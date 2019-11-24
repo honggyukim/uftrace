@@ -29,8 +29,13 @@ GLOBAL(__dentry__)
 	add	x2, sp, #16
 	bl	mcount_entry
 
+	/* child addr */
 	ldr	x0, [sp, #88]
+
+	/* find location that has the original code */
 	bl	mcount_find_code
+
+	/* overwrite return address */
 	str	x0, [sp, #88]
 
 	ldp	d0, d1, [sp], #16

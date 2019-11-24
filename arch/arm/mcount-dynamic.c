@@ -23,8 +23,13 @@ static void save_orig_code(struct mcount_disasm_info *info)
 {
 	struct mcount_orig_insn *orig;
 	uint32_t jmp_insn[6] = {
+#if 0
 		0x58000050,     /* LDR  ip0, addr */
 		0xd61f0200,     /* BR   ip0 */
+#else
+		0xe59fc000,	/* LDR  ip, addr */
+		0xe12fff1c,	/* BX   ip */
+#endif
 		info->addr + 8,
 		(info->addr + 8) >> 32,
 	};
@@ -44,17 +49,25 @@ static void save_orig_code(struct mcount_disasm_info *info)
 int mcount_setup_trampoline(struct mcount_dynamic_info *mdi)
 {
 	uintptr_t dentry_addr = (uintptr_t)(void *)&__dentry__;
-	/*
-	 * trampoline assumes {x29,x30} was pushed but x29 was not updated.
-	 * make sure stack is 8-byte aligned.
-	 */
 	uint32_t trampoline[] = {
-		0x910003fd,                     /* MOV  x29, sp */
-		0x58000050,                     /* LDR  ip0, &__dentry__ */
-		0xd61f0200,                     /* BR   ip0 */
+		0xe1a0b00d,	/* MOV  fp, sp */
+		0xe59fc000,	/* LDR  ip, &__dentry__  # ldr ip, [pc, #0] */
+		0xe12fff1c,	/* BX   ip */
 		dentry_addr,
 		dentry_addr >> 32,
 	};
+
+	/*
+	 * BX <label>:
+	 *   Branch and Exchange causes a branch to an address and instruction
+	 *   set specified by a register.
+	 *
+	 * +-----------+-----------------------+-----------+-----------+-----------+-----------+-----------+
+	 * |31 30 29 28|27 26 25 24 23 22 21 20|19 18 17 16|15 14 13 12|11 10 09 08|07 06 05 04|03 02 01 00|
+	 * +-----------+-----------------------+-----------+-----------+-----------+-----------+-----------+
+	 * |    cond   | 0  0  0  1  0  0  1  0| 1  1  1  1| 1  1  1  1| 1  1  1  1| 0  0  0  1|     Rm    |
+	 * +-----------+-----------------------+-----------+-----------+-----------+-----------+-----------+
+	 */
 
 	/* find unused 16-byte at the end of the code segment */
 	mdi->trampoline  = ALIGN(mdi->text_addr + mdi->text_size, PAGE_SIZE);
@@ -85,13 +98,46 @@ int mcount_setup_trampoline(struct mcount_dynamic_info *mdi)
 static unsigned long get_target_addr(struct mcount_dynamic_info *mdi,
 				     unsigned long addr)
 {
-	return (mdi->trampoline - addr - 4) >> 2;
+	//return (mdi->trampoline - addr - 4) >> 2;
+	return (mdi->trampoline - addr - 12) >> 2;
 }
 
+#if 0
+00010560 <a>:
+   10560:       e92d4800        push    {fp, lr}
+   10564:       e28db004        add     fp, sp, #4
+   10568:       e52de004        push    {lr}            ; (str lr, [sp, #-4]!)
+   1056c:       ebffff9a        bl      103dc <__gnu_mcount_nc@plt>
+   10570:       eb000003        bl      10584 <b>
+   10574:       e1a03000        mov     r3, r0
+   10578:       e2433001        sub     r3, r3, #1
+   1057c:       e1a00003        mov     r0, r3
+   10580:       e8bd8800        pop     {fp, pc}
+
+00010584 <b>:
+   10584:       e92d4800        push    {fp, lr}
+   10588:       e28db004        add     fp, sp, #4
+   1058c:       e52de004        push    {lr}            ; (str lr, [sp, #-4]!)
+   10590:       ebffff91        bl      103dc <__gnu_mcount_nc@plt>
+   10594:       eb000003        bl      105a8 <c>
+   10598:       e1a03000        mov     r3, r0
+   1059c:       e2833001        add     r3, r3, #1
+   105a0:       e1a00003        mov     r0, r3
+   105a4:       e8bd8800        pop     {fp, pc}
+
+000105a8 <c>:
+   105a8:       e92d4800        push    {fp, lr}
+   105ac:       e28db004        add     fp, sp, #4
+   105b0:       e52de004        push    {lr}            ; (str lr, [sp, #-4]!)
+   105b4:       ebffff88        bl      103dc <__gnu_mcount_nc@plt>
+   105b8:       ebffff7e        bl      103b8 <getpid@plt>
+   105bc:       e1a02000        mov     r2, r0
+#endif
 int mcount_patch_func(struct mcount_dynamic_info *mdi, struct sym *sym,
 		      struct mcount_disasm_engine *disasm, unsigned min_size)
 {
-	uint32_t push = 0xa9bf7bfd;  /* STP  x29, x30, [sp, #-0x10]! */
+	//uint32_t push = 0xa9bf7bfd;  /* STP  x29, x30, [sp, #-0x10]! */
+	uint32_t push_lr = 0xe52de004;	/* push {lr} */
 	uint32_t call;
 	struct mcount_disasm_info info = {
 		.sym = sym,
@@ -111,14 +157,26 @@ int mcount_patch_func(struct mcount_dynamic_info *mdi, struct sym *sym,
 
 	call = get_target_addr(mdi, info.addr);
 
-	if ((call & 0xfc000000) != 0)
+	/*
+	 * BL<c> <label>:
+	 *   Branch with Link calls a subroutine at a PC-relative address.
+	 *
+	 * +-----------+-----------+-----------------------------------------------------------------------+
+	 * |31 30 29 28|27 26 25 24|23 22 21 20 19 18 17 16 15 14 13 12 11 10 09 08 07 06 05 04 03 02 01 00|
+	 * +-----------+-----------+-----------------------------------------------------------------------+
+	 * |    cond   | 1  0  1  1|                                 imm24                                 |
+	 * +-----------+-----------+-----------------------------------------------------------------------+
+	 *
+	 * make a "BL" insn with 24-bit offset.
+	 */
+	if ((call & 0xff000000) != 0)
 		return INSTRUMENT_FAILED;
 
-	/* make a "BL" insn with 26-bit offset */
-	call |= 0x94000000;
+	call |= 0xeb000000;
+fprintf(stderr, "call patch(%#x) <- %#lx\n", call);
 
 	/* hopefully we're not patching 'memcpy' itself */
-	memcpy(insn, &push, sizeof(push));
+	memcpy(insn, &push_lr, sizeof(push_lr));
 	memcpy(insn+4, &call, sizeof(call));
 
 	/* flush icache so that cpu can execute the new code */

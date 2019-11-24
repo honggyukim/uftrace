@@ -111,10 +111,21 @@ int mcount_patch_func(struct mcount_dynamic_info *mdi, struct sym *sym,
 
 	call = get_target_addr(mdi, info.addr);
 
+	/*
+	 * Branch with Link branches to a PC-relative offset, setting the register X30 to PC+4.
+	 * It provides a hint that this is a subroutine call.
+	 *  op
+	 * +--+--------------+-----------------------------------------------------------------------------+
+	 * |31|30 29 28 27 26|25 24 23 22 21 20 19 18 17 16 15 14 13 12 11 10 09 08 07 06 05 04 03 02 01 00|
+	 * +--+--------------+-----------------------------------------------------------------------------+
+	 * | 1| 0  0  1  0  1|                                    imm26                                    |
+	 * +--+--------------+-----------------------------------------------------------------------------+
+	 *
+	 * make a "BL" insn with 26-bit offset.
+	 */
 	if ((call & 0xfc000000) != 0)
 		return INSTRUMENT_FAILED;
 
-	/* make a "BL" insn with 26-bit offset */
 	call |= 0x94000000;
 
 	/* hopefully we're not patching 'memcpy' itself */

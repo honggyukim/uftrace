@@ -20,6 +20,15 @@ GLOBAL(__dentry__)
 
 	bl 	mcount_entry
 
+	/* child addr */
+	ldr	r0, [sp, #16]
+
+	/* find location that has the original code */
+	bl	mcount_find_code
+
+	/* overwrite return address */
+	str	r0, [sp, #16]
+
 	pop 	{r0-r3, ip, lr}
 	bx	ip
 END(__dentry__)
