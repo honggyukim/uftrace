@@ -4,17 +4,15 @@
 	.align 2
 
 /* universal stack constraint: (SP mod 16) == 0 */
-/* frame pointer was saved in the trampoline */
+/* frame pointer was saved in the trampoline : push {fp, lr} */
 GLOBAL(__dentry__)
-	push 	{r0-r3, lr}  /* note that caller already pushed lr */
-	ands	r3, lr, #1  /* check lr for ARM/THUMB detection */
-	add	r0, sp, #20 /* r0 points to pushed LR  */
-	bne	1f
-	ldr	r1, [fp]    /* fp (=r11) might point to return address on THUMB */
-	ldr	r2, [r0]
-	cmp	r1, r2
-	moveq	r0, fp
-1:
+	/* save original child address for mcount_find_code */
+	push	{lr}
+
+	/* save arguments */
+	push 	{r0-r3}
+
+	add	r0, sp, #24 /* r0 points to pushed LR (parent_loc) */
 	mov 	r1, lr      /* child ip */
 	mov	r2, sp      /* mcount_args */
 
@@ -29,7 +27,16 @@ GLOBAL(__dentry__)
 	/* overwrite return address */
 	str	r0, [sp, #16]
 
-	pop 	{r0-r3, ip, lr}
+	/* restore arguments */
+	pop 	{r0-r3}
+
+	/* actual return address from mcount_find_code() */
+	pop	{ip}
+
+	/* restore fp and lr registers*/
+	pop	{fp, lr}
+
+	/* jump to the save insn */
 	bx	ip
 END(__dentry__)
 

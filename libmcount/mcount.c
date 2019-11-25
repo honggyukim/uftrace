@@ -1249,7 +1249,6 @@ static int __mcount_entry(unsigned long *parent_loc, unsigned long child,
 int mcount_entry(unsigned long *parent_loc, unsigned long child,
 		 struct mcount_regs *regs)
 {
-fprintf(stderr, "mcount_entry!\n");
 	int saved_errno = errno;
 	int ret = __mcount_entry(parent_loc, child, regs);
 

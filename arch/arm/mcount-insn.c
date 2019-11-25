@@ -43,8 +43,36 @@ static int check_prologue(struct mcount_disasm_engine *disasm, cs_insn *insn)
 	if (insn->id == ARM_INS_ADR)
 		return 1;
 
+#if 0
+# FIXME: These must be excluded!
+
+00034110 <start_pager>:
+   34110:	e59f3084 	ldr	r3, [pc, #132]	; 3419c <start_pager+0x8c>
+   34114:	e92d4010 	push	{r4, lr}
+   34118:	e1a0e000 	mov	lr, r0
+   3411c:	e893000f 	ldm	r3, {r0, r1, r2, r3}
+
+00038280 <setup_field>:
+   38280:	e92d4ff0 	push	{r4, r5, r6, r7, r8, r9, sl, fp, lr}
+   38284:	e3a0c000 	mov	ip, #0
+   38288:	e5914034 	ldr	r4, [r1, #52]	; 0x34
+   3828c:	e24dd01c 	sub	sp, sp, #28
+
+000482b4 <find_symtabs>:
+   482b4:	e1a0c000 	mov	ip, r0
+   482b8:	e1c001d0 	ldrd	r0, [r0, #16]
+   482bc:	e92d4ff8 	push	{r3, r4, r5, r6, r7, r8, r9, sl, fp, lr}
+   482c0:	e1510003 	cmp	r1, r3
+#endif
+#if 1
 	if (insn->id == ARM_INS_LDR && (insn->bytes[3] & 0x3b) == 0x18)
 		return -1;
+#else
+	if (insn->id == ARM_INS_LDR)
+		return -1;
+	if (insn->id == ARM_INS_PUSH || insn->id == ARM_INS_MOV)
+		return -1;
+#endif
 
 	detail = insn->detail;
 

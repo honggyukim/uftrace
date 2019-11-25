@@ -132,7 +132,6 @@ void *mcount_find_code(unsigned long addr)
 	orig = lookup_code(&code_tree, addr, false);
 	if (orig == NULL)
 		return NULL;
-fprintf(stderr, "[%s] addr(%#lx) <- orig->insn(%p)\n", __func__, addr, orig->insn);
 
 	return orig->insn;
 }
