@@ -23,14 +23,28 @@ void mcount_disasm_finish(struct mcount_disasm_engine *disasm)
 	cs_close(&disasm->engine);
 }
 
+/* check whether the given instruction is a Thumb32 instruction */
+static bool is_thumb32(unsigned long given)
+{
+	if ((given & 0xf800) == 0xf800 ||
+	    (given & 0xf800) == 0xf000 ||
+	    (given & 0xf800) == 0xe800)
+		return true;
+	return false;
+}
+
 /* return 0 if it's ok, -1 if not supported, 1 if modifiable */
-static int check_prologue(struct mcount_disasm_engine *disasm, cs_insn *insn)
+static int check_prologue(struct mcount_disasm_engine *disasm, cs_insn *insn,
+			  bool is_thumb)
 {
 	int i;
 	cs_arm *arm;
 	cs_detail *detail;
 	bool branch = false;
 	int status = -1;
+
+fprintf(stderr, "is_thumb = %d, insn->id = %d\n", is_thumb, insn->id);
+	if (is_thumb) return 0;
 
 	/*
 	 * 'detail' can be NULL on "data" instruction
@@ -265,6 +279,7 @@ int disasm_check_insns(struct mcount_disasm_engine *disasm,
 	uint32_t count, i;
 	int ret = INSTRUMENT_FAILED;
 	struct dynamic_bad_symbol *badsym;
+	bool is_thumb = info->addr & 1;
 
 	badsym = mcount_find_badsym(mdi, info->addr);
 	if (badsym != NULL) {
@@ -272,11 +287,26 @@ int disasm_check_insns(struct mcount_disasm_engine *disasm,
 		return INSTRUMENT_FAILED;
 	}
 
-	count = cs_disasm(disasm->engine, (void *)info->addr, info->sym->size,
+#if 0
+00024158 <command_replay>:
+   24158:       f248 6334       movw    r3, #34356      ; 0x8634
+   2415c:       f2c0 0306       movt    r3, #6
+#endif
+	count = cs_disasm(disasm->engine, (void *)(info->addr & ~1), info->sym->size,
 			  info->addr, 0, &insn);
+pr_out("count = %d, info->addr = %#lx\n", count, info->addr);
 
 	for (i = 0; i < count; i++) {
-		int state = check_prologue(disasm, &insn[i]);
+		int state = check_prologue(disasm, &insn[i], is_thumb);
+pr_out("-----------\n");
+#if 0
+		pr_out("  [%d] instruction: %s\t %s\n", state,
+			insn[i].mnemonic, insn[i].op_str);
+#else
+		pr_out("  [%d] instruction: %s\t %s  -- %s\n", state,
+			insn[i].mnemonic, insn[i].op_str,
+			cs_group_name(disasm->engine, insn[i].detail->groups[0]));
+#endif
 
 		if (state < 0) {
 			pr_dbg3("instruction not supported: %s\t %s\n",

@@ -21,6 +21,7 @@ extern void __dentry__(void);
 
 static void save_orig_code(struct mcount_disasm_info *info)
 {
+	bool is_thumb = info->addr & 1;
 	struct mcount_orig_insn *orig;
 	uint32_t jmp_insn[6] = {
 #if 0
@@ -60,6 +61,13 @@ int mcount_setup_trampoline(struct mcount_dynamic_info *mdi)
 		dentry_addr,
 		dentry_addr >> 32,
 	};
+	uint32_t trampoline2[] = {
+		0xe1a0b00d,	/* mov  fp, sp */
+		0xe59fc000,	/* ldr  ip, &__dentry__  # ldr ip, [pc, #0] */
+		0xe12fff1c,	/* bx   ip */
+		dentry_addr,
+		dentry_addr >> 32,
+	};
 
 	/*
 	 * BX <label>:
@@ -76,6 +84,10 @@ int mcount_setup_trampoline(struct mcount_dynamic_info *mdi)
 	/* find unused 16-byte at the end of the code segment */
 	mdi->trampoline  = ALIGN(mdi->text_addr + mdi->text_size, PAGE_SIZE);
 	mdi->trampoline -= sizeof(trampoline);
+#if 1
+	mdi->trampoline2  = ALIGN(mdi->text_addr + mdi->text_size, PAGE_SIZE);
+	mdi->trampoline2 -= sizeof(trampoline2);
+#endif
 
 	if (unlikely(mdi->trampoline < mdi->text_addr + mdi->text_size)) {
 		mdi->trampoline += sizeof(trampoline);
@@ -88,6 +100,19 @@ int mcount_setup_trampoline(struct mcount_dynamic_info *mdi)
 		     PROT_READ | PROT_WRITE | PROT_EXEC,
 		     MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	}
+#if 1
+	if (unlikely(mdi->trampoline2 < mdi->text_addr + mdi->text_size)) {
+		mdi->trampoline2 += sizeof(trampoline2);
+		mdi->text_size += PAGE_SIZE;
+
+		pr_dbg("adding a page for fentry trampoline2 at %#lx\n",
+		       mdi->trampoline2);
+
+		mmap((void *)mdi->trampoline2, PAGE_SIZE,
+		     PROT_READ | PROT_WRITE | PROT_EXEC,
+		     MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	}
+#endif
 
 	if (mprotect((void *)mdi->text_addr, mdi->text_size,
 		     PROT_READ | PROT_WRITE | PROT_EXEC)) {
@@ -96,13 +121,23 @@ int mcount_setup_trampoline(struct mcount_dynamic_info *mdi)
 	}
 
 	memcpy((void *)mdi->trampoline, trampoline, sizeof(trampoline));
+#if 1
+	memcpy((void *)mdi->trampoline2, trampoline2, sizeof(trampoline2));
+#endif
 	return 0;
 }
 
 static unsigned long get_target_addr(struct mcount_dynamic_info *mdi,
 				     unsigned long addr)
 {
-	return (mdi->trampoline - addr - 12) >> 2;
+	bool is_thumb = addr & 1;
+	unsigned long target_addr;
+
+	if (is_thumb)
+		target_addr = (mdi->trampoline2 - addr - 8) >> 2;
+	else
+		target_addr = (mdi->trampoline - addr - 12) >> 2;
+	return target_addr;
 }
 
 #if 0
@@ -125,8 +160,29 @@ static unsigned long get_target_addr(struct mcount_dynamic_info *mdi,
 int mcount_patch_func(struct mcount_dynamic_info *mdi, struct sym *sym,
 		      struct mcount_disasm_engine *disasm, unsigned min_size)
 {
+#if 0
+00024158 <command_replay>:
+   24158:       f248 6334       movw    r3, #34356      ; 0x8634
+   2415c:       f2c0 0306       movt    r3, #6
+   24160:       e92d 4ff0       stmdb   sp!, {r4, r5, r6, r7, r8, r9, sl, fp, lr}
+   24164:       2102            movs    r1, #2
+...
+00024f0c <delete_session_map>:
+   24f0c:       b538            push    {r3, r4, r5, lr}
+   24f0e:       4605            mov     r5, r0
+   24f10:       69c0            ldr     r0, [r0, #28]
+...
+00024f28 <create_session>:
+   24f28:       e92d 4ff0       stmdb   sp!, {r4, r5, r6, r7, r8, r9, sl, fp, lr}
+   24f2c:       b089            sub     sp, #36 ; 0x24
+   24f2e:       4680            mov     r8, r0
+...
+#endif
 #if 1
+	bool is_thumb = sym->addr & 1;
 	uint32_t push = 0xe92d4800;	/* push {fp, lr} */
+	//uint16_t push2 = 0xb700;	/* wrong: thumb: push {fp, lr} */
+	uint16_t push2 = 0xb500;	/* thumb: push {lr} */
 #else
 	uint32_t push = 0xe92d5800;	/* push {fp, ip, lr} */
 #endif
@@ -137,6 +193,7 @@ int mcount_patch_func(struct mcount_dynamic_info *mdi, struct sym *sym,
 		.addr = sym->addr + mdi->map->start,
 	};
 	void *insn = (void *)info.addr;
+fprintf(stderr, "addr = %#lx\n", info.addr);
 
 	if (min_size < CODE_SIZE)
 		min_size = CODE_SIZE;
@@ -150,29 +207,56 @@ int mcount_patch_func(struct mcount_dynamic_info *mdi, struct sym *sym,
 
 	call = get_target_addr(mdi, info.addr);
 
-	/*
-	 * BL<c> <label>:
-	 *   Branch with Link calls a subroutine at a PC-relative address.
-	 *
-	 * +-----------+-----------+-----------------------------------------------------------------------+
-	 * |31 30 29 28|27 26 25 24|23 22 21 20 19 18 17 16 15 14 13 12 11 10 09 08 07 06 05 04 03 02 01 00|
-	 * +-----------+-----------+-----------------------------------------------------------------------+
-	 * |    cond   | 1  0  1  1|                                 imm24                                 |
-	 * +-----------+-----------+-----------------------------------------------------------------------+
-	 *
-	 * make a "BL" insn with 24-bit offset.
-	 */
-	if ((call & 0xff000000) != 0)
-		return INSTRUMENT_FAILED;
+	if (is_thumb == false) {
+		/*
+		 * BL<c> <label>:
+		 *   Branch with Link calls a subroutine at a PC-relative address.
+		 *
+		 * +-----------+-----------+-----------------------------------------------------------------------+
+		 * |31 30 29 28|27 26 25 24|23 22 21 20 19 18 17 16 15 14 13 12 11 10 09 08 07 06 05 04 03 02 01 00|
+		 * +-----------+-----------+-----------------------------------------------------------------------+
+		 * |    cond   | 1  0  1  1|                                 imm24                                 |
+		 * +-----------+-----------+-----------------------------------------------------------------------+
+		 *
+		 * make a "BL" insn with 24-bit offset.
+		 */
+		if ((call & 0xff000000) != 0)
+			return INSTRUMENT_FAILED;
 
-	call |= 0xeb000000;
+		call |= 0xeb000000;
 
-	/* hopefully we're not patching 'memcpy' itself */
-	memcpy(insn, &push, sizeof(push));
-	memcpy(insn+4, &call, sizeof(call));
+		/* hopefully we're not patching 'memcpy' itself */
+		memcpy(insn, &push, sizeof(push));
+		memcpy(insn+4, &call, sizeof(call));
 
-	/* flush icache so that cpu can execute the new code */
-	__builtin___clear_cache(insn, insn + CODE_SIZE);
+		/* flush icache so that cpu can execute the new code */
+		__builtin___clear_cache(insn, insn + CODE_SIZE);
+	}
+	else {
+		/*
+		 * BL<c> <label>:
+		 *   Branch with Link calls a subroutine at a PC-relative address.
+		 *
+		 * +-----------+-----------+-----------------------------------------------------------------------+
+		 * |31 30 29 28|27 26 25 24|23 22 21 20 19 18 17 16 15 14 13 12 11 10 09 08 07 06 05 04 03 02 01 00|
+		 * +-----------+-----------+-----------------------------------------------------------------------+
+		 * |    cond   | 1  0  1  1|                                 imm24                                 |
+		 * +-----------+-----------+-----------------------------------------------------------------------+
+		 *
+		 * make a "BL" insn with 24-bit offset.
+		 */
+		if ((call & 0xff000000) != 0)
+			return INSTRUMENT_FAILED;
+
+		call |= 0xeb000000;
+
+		/* hopefully we're not patching 'memcpy' itself */
+		memcpy(insn, &push2, sizeof(push2));
+		memcpy(insn+2, &call, sizeof(call));
+
+		/* flush icache so that cpu can execute the new code */
+		__builtin___clear_cache(insn, insn + CODE_SIZE);
+	}
 
 	return INSTRUMENT_SUCCESS;
 }

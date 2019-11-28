@@ -401,6 +401,7 @@ struct mcount_dynamic_info {
 	unsigned long text_addr;
 	int text_size;
 	unsigned long trampoline;
+	unsigned long trampoline2;
 	struct list_head bad_syms;
 	void *arch;
 };
