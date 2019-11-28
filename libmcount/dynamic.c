@@ -405,6 +405,7 @@ static int do_dynamic_update(struct symtabs *symtabs, char *patch_funcs,
 				stats.skipped++;
 				break;
 			case INSTRUMENT_SUCCESS:
+				pr_dbg2("dynamic patching '%s'\n", sym->name);
 			default:
 				break;
 			}

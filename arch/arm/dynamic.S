@@ -38,6 +38,10 @@ GLOBAL(__dentry__)
 
 	/* jump to the save insn */
 	bx	ip
+
+#	add	sp, sp, #4
+#	pop	{fp, ip, lr}
+#	ldr	pc, [sp, #-16]
 END(__dentry__)
 
 

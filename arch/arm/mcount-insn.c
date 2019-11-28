@@ -63,14 +63,28 @@ static int check_prologue(struct mcount_disasm_engine *disasm, cs_insn *insn)
    482b8:	e1c001d0 	ldrd	r0, [r0, #16]
    482bc:	e92d4ff8 	push	{r3, r4, r5, r6, r7, r8, r9, sl, fp, lr}
    482c0:	e1510003 	cmp	r1, r3
+
+0002b848 <task_find_sym>:
+   2b848:	e1d2c0bc 	ldrh	ip, [r2, #12]
+   2b84c:	e92d41f0 	push	{r4, r5, r6, r7, r8, lr}
+   2b850:	e1a04002 	mov	r4, r2
+   2b854:	e1d260ba 	ldrh	r6, [r2, #10]
+
+0002bac8 <setup_pager>:
+   2bac8:       e92d4010        push    {r4, lr}
+   2bacc:       e59f0084        ldr     r0, [pc, #132]  ; 2bb58 <setup_pager+0x90>
+   2bad0:       ebff9f90        bl      13918 <getenv@plt>
+   2bad4:       e1a04000        mov     r4, r0
 #endif
-#if 1
+#if 0
 	if (insn->id == ARM_INS_LDR && (insn->bytes[3] & 0x3b) == 0x18)
 		return -1;
 #else
-	if (insn->id == ARM_INS_LDR)
-		return -1;
-	if (insn->id == ARM_INS_PUSH || insn->id == ARM_INS_MOV)
+	// https://static.docs.arm.com/ddi0406/c/DDI0406C_C_arm_architecture_reference_manual.pdf
+	/* check if the instruction is LDR, and it uses PC register */
+	if (insn->id == ARM_INS_LDR &&
+		 ((insn->bytes[2] & 0xf) == 0xf ||
+		  (insn->bytes[1] & 0xf0) == 0xf0))
 		return -1;
 #endif
 

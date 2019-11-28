@@ -23,15 +23,20 @@ static void save_orig_code(struct mcount_disasm_info *info)
 {
 	struct mcount_orig_insn *orig;
 	uint32_t jmp_insn[6] = {
+#if 0
 		0xe59fc000,	/* ldr  ip, addr */
 		0xe12fff1c,	/* bx   ip */
+#else
+		0xe51ff004,	/* ldr  pc, [pc, #-4] */
+		//0xe51ff000,	/* ldr  pc, [pc] */
+#endif
 		info->addr + 8,
 		(info->addr + 8) >> 32,
 	};
-	size_t jmp_insn_size = 16;
+	size_t jmp_insn_size = 12;
 
 	if (info->modified) {
-		memcpy(&jmp_insn[4], &info->insns[24], 8);
+		memcpy(&jmp_insn[3], &info->insns[24], 8);
 		jmp_insn_size += 8;
 	}
 
@@ -120,7 +125,11 @@ static unsigned long get_target_addr(struct mcount_dynamic_info *mdi,
 int mcount_patch_func(struct mcount_dynamic_info *mdi, struct sym *sym,
 		      struct mcount_disasm_engine *disasm, unsigned min_size)
 {
+#if 1
 	uint32_t push = 0xe92d4800;	/* push {fp, lr} */
+#else
+	uint32_t push = 0xe92d5800;	/* push {fp, ip, lr} */
+#endif
 
 	uint32_t call;
 	struct mcount_disasm_info info = {
