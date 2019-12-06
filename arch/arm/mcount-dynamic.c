@@ -61,10 +61,34 @@ int mcount_setup_trampoline(struct mcount_dynamic_info *mdi)
 		dentry_addr,
 		dentry_addr >> 32,
 	};
+#if 0
+   13a96:	f8d3 c000 	ldr.w	ip, [r3]
+   1665a:	f8d5 c00a 	ldr.w	ip, [r5, #10]
+   16718:	f8d4 c000 	ldr.w	ip, [r4]
+   175f0:	f8d4 c014 	ldr.w	ip, [r4, #20]
+   17718:	f853 cc08 	ldr.w	ip, [r3, #-8]
+   17da0:	f8d3 c02c 	ldr.w	ip, [r3, #44]	; 0x2c
+   1c042:	f8d5 c004 	ldr.w	ip, [r5, #4]
+
+   1aa16:	f04f 0b00 	mov.w	fp, #0
+   1aa42:	f04f 0b01 	mov.w	fp, #1
+   20712:	ea4f 0bcb 	mov.w	fp, fp, lsl #3
+   243aa:	f04f 0b28 	mov.w	fp, #40	; 0x28
+   27ab4:	ea4f 0b86 	mov.w	fp, r6, lsl #2
+   2d30a:	ea4f 0beb 	mov.w	fp, fp, asr #3
+
+   17eae:       4770            bx      lr
+   17eb6:       4718            bx      r3
+
+        :	ea4f 0b0d 	mov.w	fp, sp
+        :	f8df c000 	ldr.w	ip, [pc, #0]
+        :       4760            bx      ip
+        :       0000
+#endif
 	uint32_t trampoline2[] = {
-		0xe1a0b00d,	/* mov  fp, sp */
-		0xe59fc000,	/* ldr  ip, &__dentry__  # ldr ip, [pc, #0] */
-		0xe12fff1c,	/* bx   ip */
+		0x4fea0d0b,	/* mov.w  fp, sp */
+		0xdff800c0,	/* ldr.w  ip, &__dentry__  # ldr.w ip, [pc, #0] */
+		0x00006047,	/* bx     ip */
 		dentry_addr,
 		dentry_addr >> 32,
 	};
