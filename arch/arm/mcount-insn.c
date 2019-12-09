@@ -43,8 +43,8 @@ static int check_prologue(struct mcount_disasm_engine *disasm, cs_insn *insn,
 	bool branch = false;
 	int status = -1;
 
-fprintf(stderr, "is_thumb = %d, insn->id = %d\n", is_thumb, insn->id);
-	if (is_thumb) return 0;
+//fprintf(stderr, "is_thumb = %d, insn->id = %d\n", is_thumb, insn->id);
+//	if (is_thumb) return 0;
 
 	/*
 	 * 'detail' can be NULL on "data" instruction
@@ -294,14 +294,13 @@ int disasm_check_insns(struct mcount_disasm_engine *disasm,
 #endif
 	count = cs_disasm(disasm->engine, (void *)(info->addr & ~1), info->sym->size,
 			  info->addr, 0, &insn);
-pr_out("count = %d, info->addr = %#lx\n", count, info->addr);
+//pr_out("count = %d, info->addr = %#lx\n", count, info->addr);
 
 	for (i = 0; i < count; i++) {
 		int state = check_prologue(disasm, &insn[i], is_thumb);
-pr_out("-----------\n");
-#if 0
-		pr_out("  [%d] instruction: %s\t %s\n", state,
-			insn[i].mnemonic, insn[i].op_str);
+//pr_out("-----------\n");
+#if 1
+//		pr_out("  [%d] instruction: %s\t %s\n", state, insn[i].mnemonic, insn[i].op_str);
 #else
 		pr_out("  [%d] instruction: %s\t %s  -- %s\n", state,
 			insn[i].mnemonic, insn[i].op_str,

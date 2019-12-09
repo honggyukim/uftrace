@@ -19,6 +19,16 @@
 /* target instrumentation function it needs to call */
 extern void __dentry__(void);
 
+/* check whether the given instruction is a Thumb32 instruction */
+static bool is_thumb32(unsigned long given)
+{
+	if ((given & 0xf800) == 0xf800 ||
+	    (given & 0xf800) == 0xf000 ||
+	    (given & 0xf800) == 0xe800)
+		return true;
+	return false;
+}
+
 static void save_orig_code(struct mcount_disasm_info *info)
 {
 	bool is_thumb = info->addr & 1;
@@ -44,10 +54,27 @@ static void save_orig_code(struct mcount_disasm_info *info)
 		jmp_insn_size += 8;
 	}
 #endif
+#if 0
+000141ac <parse_option>:
+   141ac:	f240 1339 	movw	r3, #313	; 0x139
+   141b0:	4298      	cmp	r0, r3
+   141b2:	e92d 47f0 	stmdb	sp!, {r4, r5, r6, r7, r8, r9, sl, lr}
+   141b6:	b082      	sub	sp, #8
+   141b8:	69d7      	ldr	r7, [r2, #28]
+#endif
 	if (is_thumb == false)
 		orig = mcount_save_code(info, jmp_insn, jmp_insn_size);
-	else
-		orig = mcount_save_code(info, jmp_insn_thumb, jmp_insn_thumb_size);
+	else {
+		unsigned long addr = info->addr & ~1;
+		if (!is_thumb32(*(uint16_t*)(addr + 6)))
+			orig = mcount_save_code(info, jmp_insn_thumb, jmp_insn_thumb_size);
+		else {
+			fprintf(stderr, "thumb32 in %lx\n", addr);
+			info->orig_size += 2;
+			info->copy_size += 2;
+			orig = mcount_save_code(info, jmp_insn_thumb, jmp_insn_thumb_size);
+		}
+	}
 
 	/* make sure orig->addr same as when called from __dentry__ */
 	orig->addr += CODE_SIZE;
@@ -191,7 +218,26 @@ static unsigned long get_target_addr(struct mcount_dynamic_info *mdi,
 		//target_addr = (mdi->trampoline2 - addr - 4) >> 1;
 		//target_addr = ((mdi->trampoline2 - addr - 12) >> 1) << 16;
 		//target_addr = ((mdi->trampoline2 - addr - 6) >> 1) << 16;
+#if 0
+   13b34:	f000 f9c2 	bl	13ebc <parse_opt_file>
+   13be0:	f020 fb2e 	bl	34240 <setup_color>
+   13be4:	f01a fc3c 	bl	2e460 <setup_signal>
+   13bf6:	f011 fdc7 	bl	25788 <start_pager>
+   13c0c:	f000 f9fa 	bl	14004 <apply_default_opts>
+   13c6e:	f011 fd55 	bl	2571c <setup_pager>
+   13c7c:	f00c fe82 	bl	20984 <command_graph>
+   13c82:	f011 fd2b 	bl	256dc <wait_for_pager>
+   13c9c:	f01b fa5c 	bl	2f158 <free_parsed_cmdline>
+		call |= 0xf800f000;
+#endif
+#if 0
 		target_addr = ((mdi->trampoline2 - addr - 8) >> 1) << 16;
+#else
+		unsigned long imm32 = (mdi->trampoline2 - addr - 8) >> 1;
+		unsigned long imm10 = (imm32 & (0x3ff << 11)) >> 11;
+		unsigned long imm11 = (imm32 & 0x7ff) << 16;
+		target_addr = imm11 | imm10;
+#endif
 		//target_addr = (mdi->trampoline2 - addr - 12) >> 1;
 		//unsigned long imm32
 #if 0
@@ -291,7 +337,6 @@ int mcount_patch_func(struct mcount_dynamic_info *mdi, struct sym *sym,
 		.addr = sym->addr + mdi->map->start,
 	};
 	void *insn = (void *)(info.addr & ~1);
-fprintf(stderr, "addr = %#lx\n", info.addr);
 
 	if (min_size < CODE_SIZE)
 		min_size = CODE_SIZE;
@@ -372,13 +417,22 @@ imm32 = SignExtend(S:I1:I2:imm10:imm11:'0', 32);
    13c82:	f011 fd2b 	bl	256dc <wait_for_pager>
    13c9c:	f01b fa5c 	bl	2f158 <free_parsed_cmdline>
 #endif
+   		unsigned long addr_6 = (unsigned long)insn + 6;
 
 		/* hopefully we're not patching 'memcpy' itself */
 		memcpy(insn, &push2, sizeof(push2));
-		memcpy(insn+4, &call, sizeof(call));
-
-		/* flush icache so that cpu can execute the new code */
-		__builtin___clear_cache(insn, insn + CODE_SIZE);
+		if (is_thumb32(*(uint16_t*)addr_6)) {
+			uint16_t nop = 0xbf00;
+			memcpy(insn+4, &nop, sizeof(nop));
+			memcpy(insn+6, &call, sizeof(call));
+			/* flush icache so that cpu can execute the new code */
+			__builtin___clear_cache(insn, insn + CODE_SIZE + 2);
+		}
+		else {
+			memcpy(insn+4, &call, sizeof(call));
+			/* flush icache so that cpu can execute the new code */
+			__builtin___clear_cache(insn, insn + CODE_SIZE);
+		}
 	}
 
 	return INSTRUMENT_SUCCESS;
