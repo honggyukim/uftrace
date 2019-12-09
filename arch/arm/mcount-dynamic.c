@@ -49,18 +49,6 @@ static void save_orig_code(struct mcount_disasm_info *info)
 
 int mcount_setup_trampoline(struct mcount_dynamic_info *mdi)
 {
-	uintptr_t dentry_addr = (uintptr_t)(void *)&__dentry__;
-	/*
-	 * trampoline assumes {fp, lr} was pushed but fp(?) was not updated.
-	 * make sure stack is 8-byte aligned.
-	 */
-	uint32_t trampoline[] = {
-		0xe1a0b00d,	/* mov  fp, sp */
-		0xe59fc000,	/* ldr  ip, &__dentry__  # ldr ip, [pc, #0] */
-		0xe12fff1c,	/* bx   ip */
-		dentry_addr,
-		dentry_addr >> 32,
-	};
 #if 0
    13a96:	f8d3 c000 	ldr.w	ip, [r3]
    1665a:	f8d5 c00a 	ldr.w	ip, [r5, #10]
@@ -85,13 +73,27 @@ int mcount_setup_trampoline(struct mcount_dynamic_info *mdi)
         :       4760            bx      ip
         :       0000
 #endif
-	uint32_t trampoline2[] = {
-		0x4fea0d0b,	/* mov.w  fp, sp */
-		0xdff800c0,	/* ldr.w  ip, &__dentry__  # ldr.w ip, [pc, #0] */
-		0x00006047,	/* bx     ip */
+	uintptr_t dentry_addr = (uintptr_t)(void *)&__dentry__;
+	/*
+	 * trampoline assumes {fp, lr} was pushed but fp(?) was not updated.
+	 * make sure stack is 8-byte aligned.
+	 */
+	uint32_t trampoline[10] = {
+		/* arm mode */
+		0xe1a0b00d,	/* mov  fp, sp */
+		0xe59fc000,	/* ldr  ip, &__dentry__  # ldr ip, [pc, #0] */
+		0xe12fff1c,	/* bx   ip */
+		dentry_addr,
+		dentry_addr >> 32,
+
+		/* thumb mode */
+		0x0b0dea4f,	/* mov.w  fp, sp */
+		0xc004f8df,	/* ldr.w  ip, &__dentry__  # ldr.w ip, [pc, #4] */	// GOOD!
+		0x00004760,	/* bx     ip */
 		dentry_addr,
 		dentry_addr >> 32,
 	};
+	//uint32_t *trampoline2 = &trampoline[5];
 
 	/*
 	 * BX <label>:
@@ -108,9 +110,11 @@ int mcount_setup_trampoline(struct mcount_dynamic_info *mdi)
 	/* find unused 16-byte at the end of the code segment */
 	mdi->trampoline  = ALIGN(mdi->text_addr + mdi->text_size, PAGE_SIZE);
 	mdi->trampoline -= sizeof(trampoline);
-#if 1
+#if 0
 	mdi->trampoline2  = ALIGN(mdi->text_addr + mdi->text_size, PAGE_SIZE);
 	mdi->trampoline2 -= sizeof(trampoline2);
+#else
+	mdi->trampoline2  = mdi->trampoline + 5 * sizeof(unsigned long);
 #endif
 
 	if (unlikely(mdi->trampoline < mdi->text_addr + mdi->text_size)) {
@@ -124,7 +128,7 @@ int mcount_setup_trampoline(struct mcount_dynamic_info *mdi)
 		     PROT_READ | PROT_WRITE | PROT_EXEC,
 		     MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	}
-#if 1
+#if 0
 	if (unlikely(mdi->trampoline2 < mdi->text_addr + mdi->text_size)) {
 		mdi->trampoline2 += sizeof(trampoline2);
 		mdi->text_size += PAGE_SIZE;
@@ -145,7 +149,7 @@ int mcount_setup_trampoline(struct mcount_dynamic_info *mdi)
 	}
 
 	memcpy((void *)mdi->trampoline, trampoline, sizeof(trampoline));
-#if 1
+#if 0
 	memcpy((void *)mdi->trampoline2, trampoline2, sizeof(trampoline2));
 #endif
 	return 0;
@@ -157,10 +161,72 @@ static unsigned long get_target_addr(struct mcount_dynamic_info *mdi,
 	bool is_thumb = addr & 1;
 	unsigned long target_addr;
 
-	if (is_thumb)
-		target_addr = (mdi->trampoline2 - addr - 8) >> 2;
-	else
+	if (is_thumb == false) {
 		target_addr = (mdi->trampoline - addr - 12) >> 2;
+	}
+	else {
+		addr &= ~1;
+		/*
+		 * BL<c> <label>:
+		 *   Branch with Link calls a subroutine at a PC-relative address.
+		 *
+		 * +--------------+--+-----------------------------++-----+--+--+--+--------------------------------+
+		 * |15 14 13 12 11|10|09 08 07 06 05 04 03 02 01 00||15 14|13|12|11|10 09 08 07 06 05 04 03 02 01 00|
+		 * +--------------+--+-----------------------------++-----+--+--+--+--------------------------------+
+		 * | 1  1  1  1  0| S|            imm10            || 1  1|J1| 1|J2|              imm11             |
+		 * +--------------+--+-----------------------------++-----+--+--+--+--------------------------------+
+		 *
+		 *   I1 = NOT(J1 EOR S);
+		 *   I2 = NOT(J2 EOR S);
+		 *   imm32 = SignExtend(S:I1:I2:imm10:imm11:'0', 32);
+		 *
+		 * make a "BL" insn with 24-bit offset.
+		 */
+		//target_addr = (mdi->trampoline2 - addr - 4) >> 1;
+		//target_addr = ((mdi->trampoline2 - addr - 12) >> 1) << 16;
+		target_addr = ((mdi->trampoline2 - addr - 6) >> 1) << 16;
+		//target_addr = (mdi->trampoline2 - addr - 12) >> 1;
+		//unsigned long imm32
+#if 0
+imm32 = SignExtend(S:I1:I2:imm10:imm11:'0', 32);
+>>> hex(0x10448 + (4 + 2) * 2)
+'0x10454'
+>>> hex(0x10448 + ((4 + 2) << 1))
+'0x10454'
+#endif
+#if 0
+   13b34:	f000 f9c2 	bl	13ebc <parse_opt_file>
+   13be0:	f020 fb2e 	bl	34240 <setup_color>
+   13be4:	f01a fc3c 	bl	2e460 <setup_signal>
+   13bf6:	f011 fdc7 	bl	25788 <start_pager>
+   13c0c:	f000 f9fa 	bl	14004 <apply_default_opts>
+   13c6e:	f011 fd55 	bl	2571c <setup_pager>
+   13c7c:	f00c fe82 	bl	20984 <command_graph>
+   13c82:	f011 fd2b 	bl	256dc <wait_for_pager>
+   13c9c:	f01b fa5c 	bl	2f158 <free_parsed_cmdline>
+#endif
+#if 0
+00003a60: 2de9 f043 cbb0 0cad 0446 0f46 0390 0291  -..C.....F.F....
+
+00013a60 <main>:
+   13a60:	e92d 43f0 	stmdb	sp!, {r4, r5, r6, r7, r8, r9, lr}
+   13a64:	b0cb      	sub	sp, #300	; 0x12c
+   13a66:	ad0c      	add	r5, sp, #48	; 0x30
+   13a68:	4604      	mov	r4, r0
+   13a6a:	460f      	mov	r7, r1
+   13a6c:	9003      	str	r0, [sp, #12]
+   13a6e:	9102      	str	r1, [sp, #8]
+
+00003a70: f822 0021 2846 47f2 b009 c0f2 0609 fff7  .".!(FG.........
+
+   13a70:	22f8      	movs	r2, #248	; 0xf8
+   13a72:	2100      	movs	r1, #0
+   13a74:	4628      	mov	r0, r5
+   13a76:	f247 09b0 	movw	r9, #28848	; 0x70b0
+   13a7a:	f2c0 0906 	movt	r9, #6
+   13a7e:	f7ff ebec 	blx	13258 <memset@plt>
+#endif
+	}
 	return target_addr;
 }
 
@@ -216,7 +282,7 @@ int mcount_patch_func(struct mcount_dynamic_info *mdi, struct sym *sym,
 		.sym = sym,
 		.addr = sym->addr + mdi->map->start,
 	};
-	void *insn = (void *)info.addr;
+	void *insn = (void *)(info.addr & ~1);
 fprintf(stderr, "addr = %#lx\n", info.addr);
 
 	if (min_size < CODE_SIZE)
@@ -261,18 +327,43 @@ fprintf(stderr, "addr = %#lx\n", info.addr);
 		 * BL<c> <label>:
 		 *   Branch with Link calls a subroutine at a PC-relative address.
 		 *
-		 * +-----------+-----------+-----------------------------------------------------------------------+
-		 * |31 30 29 28|27 26 25 24|23 22 21 20 19 18 17 16 15 14 13 12 11 10 09 08 07 06 05 04 03 02 01 00|
-		 * +-----------+-----------+-----------------------------------------------------------------------+
-		 * |    cond   | 1  0  1  1|                                 imm24                                 |
-		 * +-----------+-----------+-----------------------------------------------------------------------+
+		 * +--------------+--+-----------------------------++-----+--+--+--+--------------------------------+
+		 * |15 14 13 12 11|10|09 08 07 06 05 04 03 02 01 00||15 14|13|12|11|10 09 08 07 06 05 04 03 02 01 00|
+		 * +--------------+--+-----------------------------++-----+--+--+--+--------------------------------+
+		 * | 1  1  1  1  0| S|            imm10            || 1  1|J1| 1|J2|              imm11             |
+		 * +--------------+--+-----------------------------++-----+--+--+--+--------------------------------+
+		 *
+		 *   I1 = NOT(J1 EOR S);
+		 *   I2 = NOT(J2 EOR S);
+		 *   imm32 = SignExtend(S:I1:I2:imm10:imm11:'0', 32);
 		 *
 		 * make a "BL" insn with 24-bit offset.
 		 */
-		if ((call & 0xff000000) != 0)
-			return INSTRUMENT_FAILED;
+//		if ((call & 0xff000000) != 0)
+//			return INSTRUMENT_FAILED;
 
-		call |= 0xeb000000;
+#if 0
+imm32 = SignExtend(S:I1:I2:imm10:imm11:'0', 32);
+>>> hex(0x10448 + (4 + 2) * 2)
+'0x10454'
+>>> hex(0x10448 + ((4 + 2) << 1))
+'0x10454'
+#endif
+		call |= 0xf800f000;
+#if 0
+   13b34:	f000 f9c2 	bl	13ebc <parse_opt_file>
+
+   13be0:	f020 fb2e 	bl	34240 <setup_color>
+=> 2efb20f0
+
+   13be4:	f01a fc3c 	bl	2e460 <setup_signal>
+   13bf6:	f011 fdc7 	bl	25788 <start_pager>
+   13c0c:	f000 f9fa 	bl	14004 <apply_default_opts>
+   13c6e:	f011 fd55 	bl	2571c <setup_pager>
+   13c7c:	f00c fe82 	bl	20984 <command_graph>
+   13c82:	f011 fd2b 	bl	256dc <wait_for_pager>
+   13c9c:	f01b fa5c 	bl	2f158 <free_parsed_cmdline>
+#endif
 
 		/* hopefully we're not patching 'memcpy' itself */
 		memcpy(insn, &push2, sizeof(push2));
