@@ -46,8 +46,16 @@ static void save_orig_code(struct mcount_disasm_info *info)
 		info->addr + 8,
 		(info->addr + 8) >> 32,
 	};
+	uint32_t jmp_insn_thumb2[6] = {
+		/* thumb mode */
+		0xc004f8df,	/* ldr.w  ip, &__dentry__  # ldr.w ip, [pc, #4] */	// GOOD!
+		0x00004760,	/* bx     ip */
+		info->addr + 10,
+		(info->addr + 10) >> 32,
+	};
 	size_t jmp_insn_size = 12;
 	size_t jmp_insn_thumb_size = 16;
+fprintf(stderr, "info->addr + 10 = %lx\n", info->addr + 10);
 #if 0
 	if (info->modified) {
 		memcpy(&jmp_insn[3], &info->insns[24], 8);
@@ -69,10 +77,12 @@ static void save_orig_code(struct mcount_disasm_info *info)
 		if (!is_thumb32(*(uint16_t*)(addr + 6)))
 			orig = mcount_save_code(info, jmp_insn_thumb, jmp_insn_thumb_size);
 		else {
-			fprintf(stderr, "thumb32 in %lx\n", addr);
+			fprintf(stderr, "thumb32 in addr(%lx)\n", addr);
+			fprintf(stderr, "thumb32 in info->addr(%lx)\n", info->addr);
 			info->orig_size += 2;
 			info->copy_size += 2;
-			orig = mcount_save_code(info, jmp_insn_thumb, jmp_insn_thumb_size);
+			orig = mcount_save_code(info, jmp_insn_thumb2, jmp_insn_thumb_size);
+			orig->addr += 2;
 		}
 	}
 

@@ -46,7 +46,7 @@ static struct mcount_orig_insn *lookup_code(struct rb_root *root,
 	while (*p) {
 		parent = *p;
 		iter = rb_entry(parent, struct mcount_orig_insn, node);
-
+fprintf(stderr, "iter->addr(%lx) == addr(%lx)\n", iter->addr, addr);
 		if (iter->addr == addr)
 			return iter;
 
@@ -61,6 +61,7 @@ static struct mcount_orig_insn *lookup_code(struct rb_root *root,
 
 	iter = xmalloc(sizeof(*iter));
 	iter->addr = addr;
+fprintf(stderr, "inside lookup: save iter->addr(%lx)\n", iter->addr);
 
 	rb_link_node(&iter->node, parent, p);
 	rb_insert_color(&iter->node, root);
@@ -97,7 +98,7 @@ struct mcount_orig_insn *mcount_save_code(struct mcount_disasm_info *info,
 
 		list_add_tail(&cp->list, &code_pages);
 	}
-
+fprintf(stderr, "save info->addr(%lx)\n", info->addr);
 	orig = lookup_code(&code_tree, info->addr, true);
 	orig->insn = cp->page + cp->pos;
 	orig->orig = orig->insn;
@@ -107,12 +108,16 @@ struct mcount_orig_insn *mcount_save_code(struct mcount_disasm_info *info,
 	if (info->modified) {
 		/* save original instructions before modification */
 		orig->orig = orig->insn + patch_size - ALIGN(info->orig_size, 16);
-		memcpy(orig->orig, (void *)info->addr, info->orig_size);
+//fprintf(stderr, "> info->orig_size(%d)\n", info->orig_size);
+//abort();
+		memcpy(orig->orig, (void *)(info->addr & ~1), info->orig_size);
 	}
-
+fprintf(stderr, "info->orig_size(%d)\n", info->orig_size);
+fprintf(stderr, "info->copy_size(%d)\n", info->copy_size);
 	memcpy(orig->insn, info->insns, info->copy_size);
+fprintf(stderr, "orig->insn(%lx)\n", (unsigned long)orig->insn);	//  76e7e000
 	memcpy(orig->insn + info->copy_size, jmp_insn, jmp_size);
-
+fprintf(stderr, "patch_size += %d\n", patch_size);
 	cp->pos += patch_size;
 	return orig;
 }
