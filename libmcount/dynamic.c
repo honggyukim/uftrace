@@ -133,7 +133,7 @@ void *mcount_find_code(unsigned long addr)
 	if (orig == NULL)
 		return NULL;
 
-	return orig->insn;
+	return orig->insn + (addr & 1);
 }
 
 struct mcount_orig_insn * mcount_find_insn(unsigned long addr)

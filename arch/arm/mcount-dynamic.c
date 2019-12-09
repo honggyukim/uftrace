@@ -24,24 +24,30 @@ static void save_orig_code(struct mcount_disasm_info *info)
 	bool is_thumb = info->addr & 1;
 	struct mcount_orig_insn *orig;
 	uint32_t jmp_insn[6] = {
-#if 0
-		0xe59fc000,	/* ldr  ip, addr */
-		0xe12fff1c,	/* bx   ip */
-#else
+		/* arm mode */
 		0xe51ff004,	/* ldr  pc, [pc, #-4] */
-		//0xe51ff000,	/* ldr  pc, [pc] */
-#endif
+		info->addr + 8,
+		(info->addr + 8) >> 32,
+	};
+	uint32_t jmp_insn_thumb[6] = {
+		/* thumb mode */
+		0xc004f8df,	/* ldr.w  ip, &__dentry__  # ldr.w ip, [pc, #4] */	// GOOD!
+		0x00004760,	/* bx     ip */
 		info->addr + 8,
 		(info->addr + 8) >> 32,
 	};
 	size_t jmp_insn_size = 12;
-
+	size_t jmp_insn_thumb_size = 16;
+#if 0
 	if (info->modified) {
 		memcpy(&jmp_insn[3], &info->insns[24], 8);
 		jmp_insn_size += 8;
 	}
-
-	orig = mcount_save_code(info, jmp_insn, jmp_insn_size);
+#endif
+	if (is_thumb == false)
+		orig = mcount_save_code(info, jmp_insn, jmp_insn_size);
+	else
+		orig = mcount_save_code(info, jmp_insn_thumb, jmp_insn_thumb_size);
 
 	/* make sure orig->addr same as when called from __dentry__ */
 	orig->addr += CODE_SIZE;
@@ -184,7 +190,8 @@ static unsigned long get_target_addr(struct mcount_dynamic_info *mdi,
 		 */
 		//target_addr = (mdi->trampoline2 - addr - 4) >> 1;
 		//target_addr = ((mdi->trampoline2 - addr - 12) >> 1) << 16;
-		target_addr = ((mdi->trampoline2 - addr - 6) >> 1) << 16;
+		//target_addr = ((mdi->trampoline2 - addr - 6) >> 1) << 16;
+		target_addr = ((mdi->trampoline2 - addr - 8) >> 1) << 16;
 		//target_addr = (mdi->trampoline2 - addr - 12) >> 1;
 		//unsigned long imm32
 #if 0
@@ -272,7 +279,8 @@ int mcount_patch_func(struct mcount_dynamic_info *mdi, struct sym *sym,
 	bool is_thumb = sym->addr & 1;
 	uint32_t push = 0xe92d4800;	/* push {fp, lr} */
 	//uint16_t push2 = 0xb700;	/* wrong: thumb: push {fp, lr} */
-	uint16_t push2 = 0xb500;	/* thumb: push {lr} */
+	//uint16_t push2 = 0xb500;	/* thumb: push {lr} */
+	uint32_t push2 = 0x4800e92d;	/* thumb: push.w {fp, lr} */
 #else
 	uint32_t push = 0xe92d5800;	/* push {fp, ip, lr} */
 #endif
@@ -367,7 +375,7 @@ imm32 = SignExtend(S:I1:I2:imm10:imm11:'0', 32);
 
 		/* hopefully we're not patching 'memcpy' itself */
 		memcpy(insn, &push2, sizeof(push2));
-		memcpy(insn+2, &call, sizeof(call));
+		memcpy(insn+4, &call, sizeof(call));
 
 		/* flush icache so that cpu can execute the new code */
 		__builtin___clear_cache(insn, insn + CODE_SIZE);
