@@ -43,7 +43,7 @@ static int check_prologue(struct mcount_disasm_engine *disasm, cs_insn *insn,
 	bool branch = false;
 	int status = -1;
 
-//fprintf(stderr, "is_thumb = %d, insn->id = %d\n", is_thumb, insn->id);
+fprintf(stderr, "is_thumb = %d, insn->id = %d\n", is_thumb, insn->id);
 //	if (is_thumb) return 0;
 
 	/*
@@ -89,6 +89,14 @@ static int check_prologue(struct mcount_disasm_engine *disasm, cs_insn *insn,
    2bacc:       e59f0084        ldr     r0, [pc, #132]  ; 2bb58 <setup_pager+0x90>
    2bad0:       ebff9f90        bl      13918 <getenv@plt>
    2bad4:       e1a04000        mov     r4, r0
+
+
+000141ac <parse_option>:
+   141ac:	f240 1339 	movw	r3, #313	; 0x139
+   141b0`:	4298      	cmp	r0, r3
+   141b2:	e92d 47f0 	stmdb	sp!, {r4, r5, r6, r7, r8, r9, sl, lr}
+   141b6:	b082      	sub	sp, #8
+   141b8:	69d7      	ldr	r7, [r2, #28]
 #endif
 #if 0
 	if (insn->id == ARM_INS_LDR && (insn->bytes[3] & 0x3b) == 0x18)
@@ -130,6 +138,7 @@ static int check_prologue(struct mcount_disasm_engine *disasm, cs_insn *insn,
 
 	for (i = 0; i < arm->op_count; i++) {
 		cs_arm_op *op = &arm->operands[i];
+//pr_out("  [%d] instruction: %s\t %s\n", state, insn[i].mnemonic, insn[i].op_str);
 
 		switch (op->type) {
 		case ARM_OP_REG:
@@ -280,6 +289,7 @@ int disasm_check_insns(struct mcount_disasm_engine *disasm,
 	int ret = INSTRUMENT_FAILED;
 	struct dynamic_bad_symbol *badsym;
 	bool is_thumb = info->addr & 1;
+	unsigned long addr = info->addr & ~1;
 
 	badsym = mcount_find_badsym(mdi, info->addr);
 	if (badsym != NULL) {
@@ -292,15 +302,23 @@ int disasm_check_insns(struct mcount_disasm_engine *disasm,
    24158:       f248 6334       movw    r3, #34356      ; 0x8634
    2415c:       f2c0 0306       movt    r3, #6
 #endif
-	count = cs_disasm(disasm->engine, (void *)(info->addr & ~1), info->sym->size,
-			  info->addr, 0, &insn);
-//pr_out("count = %d, info->addr = %#lx\n", count, info->addr);
+	/* detect and set the capstone engine in ARM or THUMB mode */
+	if (is_thumb)
+		cs_option(disasm->engine, CS_OPT_MODE, CS_MODE_THUMB);
+	else
+		cs_option(disasm->engine, CS_OPT_MODE, CS_MODE_ARM);
+
+	//count = cs_disasm(disasm->engine, (void *)(info->addr & ~1), info->sym->size,
+	count = cs_disasm(disasm->engine, (void *)addr, info->sym->size,
+			  addr, 0, &insn);
+pr_out("count = %d, info->addr = %#lx\n", count, info->addr);
 
 	for (i = 0; i < count; i++) {
 		int state = check_prologue(disasm, &insn[i], is_thumb);
 //pr_out("-----------\n");
+pr_out("--- state = %d\n", state);
 #if 1
-//		pr_out("  [%d] instruction: %s\t %s\n", state, insn[i].mnemonic, insn[i].op_str);
+		pr_out("  [%d] instruction: %s\t %s\n", state, insn[i].mnemonic, insn[i].op_str);
 #else
 		pr_out("  [%d] instruction: %s\t %s  -- %s\n", state,
 			insn[i].mnemonic, insn[i].op_str,
@@ -314,10 +332,12 @@ int disasm_check_insns(struct mcount_disasm_engine *disasm,
 		}
 
 		if (state) {
+fprintf(stderr, "> call modify_instruction\n");
 			if (!modify_instruction(disasm, &insn[i], mdi, info))
 				goto out;
 		}
 		else {
+fprintf(stderr, "    memcpy info->copy_size(%d) -- insn[i].size(%d)\n", info->copy_size, insn[i].size);
 			memcpy(info->insns + info->copy_size, insn[i].bytes, insn[i].size);
 			info->copy_size += insn[i].size;
 		}
@@ -328,6 +348,7 @@ int disasm_check_insns(struct mcount_disasm_engine *disasm,
 			break;
 		}
 	}
+return 0;
 
 	while (++i < count) {
 		if (!check_body(disasm, &insn[i], mdi, info)) {
@@ -367,9 +388,12 @@ int disasm_check_insns(struct mcount_disasm_engine *disasm,
 		       struct mcount_disasm_info *info)
 {
 	uint8_t *insn = (void *)info->addr;
+fprintf(stderr, "info->addr(%#lx)\n", info->addr);
 
 	if (!disasm_check_insn(&insn[3]) || !disasm_check_insn(&insn[7]))
 		return INSTRUMENT_FAILED;
+
+	//if (insn[
 
 	memcpy(info->insns, insn, INSN_SIZE);
 	info->orig_size = INSN_SIZE;

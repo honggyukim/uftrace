@@ -243,7 +243,8 @@ static unsigned long get_target_addr(struct mcount_dynamic_info *mdi,
 #if 0
 		target_addr = ((mdi->trampoline2 - addr - 8) >> 1) << 16;
 #else
-		unsigned long imm32 = (mdi->trampoline2 - addr - 8) >> 1;
+		//unsigned long imm32 = (mdi->trampoline2 - addr - 8) >> 1;
+		unsigned long imm32 = (mdi->trampoline2 - addr - 10) >> 1;
 		unsigned long imm10 = (imm32 & (0x3ff << 11)) >> 11;
 		unsigned long imm11 = (imm32 & 0x7ff) << 16;
 		target_addr = imm11 | imm10;

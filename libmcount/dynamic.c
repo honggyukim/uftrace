@@ -46,7 +46,6 @@ static struct mcount_orig_insn *lookup_code(struct rb_root *root,
 	while (*p) {
 		parent = *p;
 		iter = rb_entry(parent, struct mcount_orig_insn, node);
-fprintf(stderr, "iter->addr(%lx) == addr(%lx)\n", iter->addr, addr);
 		if (iter->addr == addr)
 			return iter;
 
@@ -61,7 +60,6 @@ fprintf(stderr, "iter->addr(%lx) == addr(%lx)\n", iter->addr, addr);
 
 	iter = xmalloc(sizeof(*iter));
 	iter->addr = addr;
-fprintf(stderr, "inside lookup: save iter->addr(%lx)\n", iter->addr);
 
 	rb_link_node(&iter->node, parent, p);
 	rb_insert_color(&iter->node, root);
@@ -115,12 +113,29 @@ fprintf(stderr, "save info->addr(%lx)\n", info->addr);
 fprintf(stderr, "info->orig_size(%d)\n", info->orig_size);
 fprintf(stderr, "info->copy_size(%d)\n", info->copy_size);
 	memcpy(orig->insn, info->insns, info->copy_size);
-fprintf(stderr, "orig->insn(%lx)\n", (unsigned long)orig->insn);	//  76e7e000
+fprintf(stderr, "orig->insn(%lx) = %lx\n", (unsigned long)orig->insn,
+					*(unsigned long*)orig->insn);	//  76e7e000
+fprintf(stderr, "info->insns+2(%lx) = [0]%x, [1]%x, [2]%x, [3]%x, [4]%x, [5]%x\n", (unsigned long)((char*)info->insns + 2),
+				//*(uint16_t*)&info->insns[0], *(uint16_t*)&info->insns[1],
+				//*(uint16_t*)&info->insns[2], *(uint16_t*)&info->insns[3]);	//  76e7e000
+				*(uint16_t*)info->insns , *(uint16_t*)(info->insns + 2),
+				*(uint16_t*)(info->insns + 4), *(uint16_t*)(info->insns + 6),	//  76e7e000
+				*(uint16_t*)(info->insns + 8), *(uint16_t*)(info->insns + 10));	//  76e7e000
+// [0]f240, [1]1339, [2]4298, [3]e92d, [4]0, [5]0
 	memcpy(orig->insn + info->copy_size, jmp_insn, jmp_size);
 fprintf(stderr, "patch_size += %d\n", patch_size);
 	cp->pos += patch_size;
 	return orig;
 }
+#if 0
+count = 1289, info->addr = 0x141ad
+  [0] instruction: movw  r3, #0x139
+    memcpy info->copy_size(0) -- insn[i].size(4)
+  [0] instruction: cmp   r0, r3
+    memcpy info->copy_size(4) -- insn[i].size(2)
+  [0] instruction: push.w        {r4, r5, r6, r7, r8, sb, sl, lr}
+    memcpy info->copy_size(6) -- insn[i].size(4)
+#endif
 
 void mcount_freeze_code(void)
 {
