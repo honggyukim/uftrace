@@ -97,6 +97,13 @@ fprintf(stderr, "is_thumb = %d, insn->id = %d\n", is_thumb, insn->id);
    141b2:	e92d 47f0 	stmdb	sp!, {r4, r5, r6, r7, r8, r9, sl, lr}
    141b6:	b082      	sub	sp, #8
    141b8:	69d7      	ldr	r7, [r2, #28]
+
+
+000347a8 <__pr_color>:
+   347a8:	b40e      	push	{r1, r2, r3}
+   347aa:	2252      	movs	r2, #82	; 0x52
+   347ac:	4b15      	ldr	r3, [pc, #84]	; (34804 <__pr_color+0x5c>)
+   347ae:	b530      	push	{r4, r5, lr}
 #endif
 #if 0
 	if (insn->id == ARM_INS_LDR && (insn->bytes[3] & 0x3b) == 0x18)
@@ -108,6 +115,18 @@ fprintf(stderr, "is_thumb = %d, insn->id = %d\n", is_thumb, insn->id);
 		 ((insn->bytes[2] & 0xf) == 0xf ||
 		  (insn->bytes[1] & 0xf0) == 0xf0))
 		return -1;
+#endif
+#if 1
+	if (!is_thumb32((insn->bytes[1] << 8) | insn->bytes[0])) {
+		/* e.g. 4b15         ldr  r3, [pc, #84] */
+		if ((insn->bytes[1] & 0xf8) == 0x48)
+			return -1;
+	}
+	else {
+		/* e.g. f8df b084    ldr.w  fp, [pc, #132] */
+		/* e.g. f85d fb04    ldr.w  pc, [sp], #4   */
+		/* TODO */
+	}
 #endif
 
 	detail = insn->detail;
