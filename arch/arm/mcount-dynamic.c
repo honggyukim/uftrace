@@ -208,7 +208,13 @@ static unsigned long get_target_addr(struct mcount_dynamic_info *mdi,
 		target_addr = (mdi->trampoline - addr - 12) >> 2;
 	}
 	else {
+		int offset = 8;
+
 		addr &= ~1;
+		if (is_thumb32(*(uint16_t*)(addr + 6))) {
+			/* it has to be adjusted as a single NOP is inserted */
+			offset += 2;
+		}
 		/*
 		 * BL<c> <label>:
 		 *   Branch with Link calls a subroutine at a PC-relative address.
@@ -244,7 +250,7 @@ static unsigned long get_target_addr(struct mcount_dynamic_info *mdi,
 		target_addr = ((mdi->trampoline2 - addr - 8) >> 1) << 16;
 #else
 		//unsigned long imm32 = (mdi->trampoline2 - addr - 8) >> 1;
-		unsigned long imm32 = (mdi->trampoline2 - addr - 10) >> 1;
+		unsigned long imm32 = (mdi->trampoline2 - addr - offset) >> 1;
 		unsigned long imm10 = (imm32 & (0x3ff << 11)) >> 11;
 		unsigned long imm11 = (imm32 & 0x7ff) << 16;
 		target_addr = imm11 | imm10;
