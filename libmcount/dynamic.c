@@ -82,6 +82,7 @@ struct mcount_orig_insn *mcount_save_code(struct mcount_disasm_info *info,
 	}
 	else {
 		patch_size = ALIGN(info->copy_size + jmp_size, 32);
+fprintf(stderr, "patch_size = %d\n", patch_size);
 	}
 
 	if (!list_empty(&code_pages))
@@ -112,6 +113,15 @@ struct mcount_orig_insn *mcount_save_code(struct mcount_disasm_info *info,
 
 	memcpy(orig->insn, info->insns, info->copy_size);
 	memcpy(orig->insn + info->copy_size, jmp_insn, jmp_size);
+#if 0
+00010454 <c>:
+   10454:       b580            push    {r7, lr}
+   10456:       af00            add     r7, sp, #0
+   10458:       f7ff ef62       blx     10320 <getpid@plt>
+   1045c:       4601            mov     r1, r0
+   1045e:       f24b 5389       movw    r3, #46473      ; 0xb589
+   10462:       f2c1 43f8       movt    r3, #5368       ; 0x14f8
+#endif
 
 	cp->pos += patch_size;
 	return orig;
@@ -133,7 +143,8 @@ void *mcount_find_code(unsigned long addr)
 	if (orig == NULL)
 		return NULL;
 
-	return orig->insn;
+	/* "addr & 1" is for thumb code, but no effect on other arches */
+	return orig->insn + (addr & 1);
 }
 
 struct mcount_orig_insn * mcount_find_insn(unsigned long addr)
@@ -534,7 +545,7 @@ bool mcount_add_badsym(struct mcount_dynamic_info *mdi, unsigned long callsite,
 	if (sym->addr + mdi->map->start == target)
 		return false;
 
-	pr_dbg2("bad jump: %s:%lx to %lx\n", sym ? sym->name : "<unknown>",
+fprintf(stderr, "bad jump: %s:%llx to %llx\n", sym ? sym->name : "<unknown>",
 		callsite - mdi->map->start, target - mdi->map->start);
 
 	badsym = xmalloc(sizeof(*badsym));

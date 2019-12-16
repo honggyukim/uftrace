@@ -240,7 +240,7 @@ unsigned long *mcount_arch_parent_location(struct symtabs *symtabs,
 		pr_err_ns("cannot find symbol for %lx\n", child_ip);
 
 	// on ARM mode, return as is
-	if ((sym->addr & 1) == 0)
+//	if ((sym->addr & 1) == 0)
 		return parent_loc;
 
 	map = find_map(symtabs, child_ip);

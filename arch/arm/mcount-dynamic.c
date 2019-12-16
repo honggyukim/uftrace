@@ -19,16 +19,41 @@
 /* target instrumentation function it needs to call */
 extern void __dentry__(void);
 
-static void save_orig_code(struct mcount_disasm_info *info)
+static void save_orig_arm_code(struct mcount_disasm_info *info,
+			       struct mcount_orig_insn **orig)
 {
-	struct mcount_orig_insn *orig;
 	uint32_t jmp_insn[] = {
 		0xe51ff004,	/* ldr  pc, [pc, #-4] */
 		info->addr + CODE_SIZE,
 	};
 	size_t jmp_insn_size = CODE_SIZE;
 
-	orig = mcount_save_code(info, jmp_insn, jmp_insn_size);
+	*orig = mcount_save_code(info, jmp_insn, jmp_insn_size);
+}
+
+static void save_orig_thumb_code(struct mcount_disasm_info *info,
+			       struct mcount_orig_insn **orig)
+{
+	uint32_t jmp_insn[] = {
+		/* thumb mode */
+		0xc004f8df,	/* ldr.w  ip, &__dentry__  # ldr.w ip, [pc, #4] */
+		0x00004760,	/* bx     ip */
+		info->addr + 8,
+	};
+	size_t jmp_insn_size = 12;
+
+	*orig = mcount_save_code(info, jmp_insn, jmp_insn_size);
+}
+
+static void save_orig_code(struct mcount_disasm_info *info)
+{
+	struct mcount_orig_insn *orig;
+	bool is_thumb = info->addr & 1;
+
+	if (is_thumb == false)
+		save_orig_arm_code(info, &orig);
+	else
+		save_orig_thumb_code(info, &orig);
 
 	/* make sure orig->addr same as when called from __dentry__ */
 	orig->addr += CODE_SIZE;
@@ -39,15 +64,24 @@ int mcount_setup_trampoline(struct mcount_dynamic_info *mdi)
 	uintptr_t dentry_addr = (uintptr_t)(void *)&__dentry__;
 	/* make sure stack is 8-byte aligned */
 	uint32_t trampoline[] = {
+		/* arm mode */
 		0xe1a0b00d,	/* mov  fp, sp */
 		0xe59fc000,	/* ldr  ip, &__dentry__  # ldr ip, [pc, #0] */
 		0xe12fff1c,	/* bx   ip */
+		dentry_addr,
+
+		/* thumb mode */
+		0x0b0dea4f,	/* mov.w  fp, sp */
+		0xc004f8df,	/* ldr.w  ip, &__dentry__  # ldr.w ip, [pc, #4] */	// GOOD!
+		0x00004760,	/* bx     ip */
 		dentry_addr,
 	};
 
 	/* find unused 16-byte at the end of the code segment */
 	mdi->trampoline  = ALIGN(mdi->text_addr + mdi->text_size, PAGE_SIZE);
 	mdi->trampoline -= sizeof(trampoline);
+
+//	mdi->trampoline_thumb  = mdi->trampoline + 4 * sizeof(uint32_t);
 
 	if (unlikely(mdi->trampoline < mdi->text_addr + mdi->text_size)) {
 		mdi->trampoline += sizeof(trampoline);
@@ -74,19 +108,42 @@ int mcount_setup_trampoline(struct mcount_dynamic_info *mdi)
 static unsigned long get_target_addr(struct mcount_dynamic_info *mdi,
 				     unsigned long addr)
 {
-	return (mdi->trampoline - addr - 12) >> 2;
+	bool is_thumb = addr & 1;
+	unsigned long trampoline = mdi->trampoline;
+	unsigned long target_addr;
+
+	if (is_thumb == false) {
+		/* arm mode */
+		target_addr = (trampoline - addr - 12) >> 2;
+	}
+	else {
+		/* thum mode */
+		unsigned long imm32, imm10, imm11;
+
+		/* adjust the address for thumb trampoline */
+		trampoline += 4 * sizeof(uint32_t);
+
+		addr &= ~1;
+		imm32 = (trampoline - addr - 8) >> 1;
+		imm10 = (imm32 & (0x3ff << 11)) >> 11;
+		imm11 = (imm32 & 0x7ff) << 16;
+		target_addr = imm11 | imm10;
+	}
+	return target_addr;
 }
 
 int mcount_patch_func(struct mcount_dynamic_info *mdi, struct sym *sym,
 		      struct mcount_disasm_engine *disasm, unsigned min_size)
 {
-	uint32_t push = 0xe92d4800;	/* push {fp, lr} */
+	bool is_thumb = sym->addr & 1;
+	uint32_t push_arm   = 0xe92d4800;	/* push {fp, lr} */
+	uint32_t push_thumb = 0x4800e92d;	/* thumb: push.w {fp, lr} */
 	uint32_t call;
 	struct mcount_disasm_info info = {
 		.sym = sym,
 		.addr = sym->addr + mdi->map->start,
 	};
-	void *insn = (void *)info.addr;
+	void *insn = (void *)(info.addr & ~1);
 
 	if (min_size < CODE_SIZE)
 		min_size = CODE_SIZE;
@@ -100,18 +157,35 @@ int mcount_patch_func(struct mcount_dynamic_info *mdi, struct sym *sym,
 
 	call = get_target_addr(mdi, info.addr);
 
-	if ((call & 0xff000000) != 0)
-		return INSTRUMENT_FAILED;
+	if (is_thumb == false) {
+		/* arm mode */
+		if ((call & 0xff000000) != 0)
+			return INSTRUMENT_FAILED;
 
-	/* make a "BL" insn with 24-bit offset */
-	call |= 0xeb000000;
+		/* make a "BL" insn with 24-bit offset */
+		call |= 0xeb000000;
 
-	/* hopefully we're not patching 'memcpy' itself */
-	memcpy(insn, &push, sizeof(push));
-	memcpy(insn+4, &call, sizeof(call));
+		/* hopefully we're not patching 'memcpy' itself */
+		memcpy(insn, &push_arm, sizeof(push_arm));
+		memcpy(insn+4, &call, sizeof(call));
 
-	/* flush icache so that cpu can execute the new code */
-	__builtin___clear_cache(insn, insn + CODE_SIZE);
+		/* flush icache so that cpu can execute the new code */
+		__builtin___clear_cache(insn, insn + CODE_SIZE);
+	}
+	else {
+		/* thumb mode */
+//		if ((call & 0xff000000) != 0)
+//			return INSTRUMENT_FAILED;
+
+		call |= 0xf800f000;
+
+		/* hopefully we're not patching 'memcpy' itself */
+		memcpy(insn, &push_thumb, sizeof(push_thumb));
+		memcpy(insn+4, &call, sizeof(call));
+
+		/* flush icache so that cpu can execute the new code */
+		__builtin___clear_cache(insn, insn + CODE_SIZE);
+	}
 
 	return INSTRUMENT_SUCCESS;
 }

@@ -31,8 +31,6 @@ static int check_prologue(struct mcount_disasm_engine *disasm, cs_insn *insn)
 	cs_detail *detail;
 	bool branch = false;
 	int status = -1;
-	cs_regs regs_read, regs_write;
-	uint8_t regs_read_count, regs_write_count;
 
 	/*
 	 * 'detail' can be NULL on "data" instruction
@@ -170,6 +168,8 @@ int disasm_check_insns(struct mcount_disasm_engine *disasm,
 	uint32_t count, i;
 	int ret = INSTRUMENT_FAILED;
 	struct dynamic_bad_symbol *badsym;
+	bool is_thumb = info->addr & 1;
+	unsigned long addr = info->addr & ~1;
 
 	badsym = mcount_find_badsym(mdi, info->addr);
 	if (badsym != NULL) {
@@ -177,16 +177,29 @@ int disasm_check_insns(struct mcount_disasm_engine *disasm,
 		return INSTRUMENT_FAILED;
 	}
 
+	/* detect and set the capstone engine in ARM or THUMB mode */
+	if (is_thumb)
+		cs_option(disasm->engine, CS_OPT_MODE, CS_MODE_THUMB);
+	else
+		cs_option(disasm->engine, CS_OPT_MODE, CS_MODE_ARM);
+
+#if 0
 	count = cs_disasm(disasm->engine, (void *)info->addr, info->sym->size,
 			  info->addr, 0, &insn);
+#else
+	count = cs_disasm(disasm->engine, (void *)addr, info->sym->size, addr,
+			  0, &insn);
+#endif
 
 	for (i = 0; i < count; i++) {
+fprintf(stderr, "[%d] instruction: %s\t %s\n", i, insn[i].mnemonic, insn[i].op_str);
 		if (check_prologue(disasm, &insn[i]) < 0) {
-			pr_dbg3("instruction not supported: %s\t %s\n",
+			fprintf(stderr, "instruction not supported: %s\t %s\n",
 				insn[i].mnemonic, insn[i].op_str);
 			goto out;
 		}
 
+fprintf(stderr, "insn[%d].size = %d\n", i, insn[i].size);
 		memcpy(info->insns + info->copy_size, insn[i].bytes, insn[i].size);
 		info->copy_size += insn[i].size;
 		info->orig_size += insn[i].size;
@@ -200,6 +213,7 @@ int disasm_check_insns(struct mcount_disasm_engine *disasm,
 	while (++i < count) {
 		if (!check_body(disasm, &insn[i], mdi, info)) {
 			ret = INSTRUMENT_FAILED;
+fprintf(stderr, "check_body failed!\n");
 			break;
 		}
 	}
