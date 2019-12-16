@@ -209,6 +209,7 @@ fprintf(stderr, "insn[%d].size = %d\n", i, insn[i].size);
 			break;
 		}
 	}
+return 0;
 
 	while (++i < count) {
 		if (!check_body(disasm, &insn[i], mdi, info)) {
