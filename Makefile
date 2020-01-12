@@ -55,8 +55,10 @@ INSTALL = install
 
 export ARCH CC AR LD RM srcdir objdir LDFLAGS
 
+FEATURE_CFLAGS :=
 COMMON_CFLAGS := -D_GNU_SOURCE $(CFLAGS) $(CPPFLAGS)
-COMMON_CFLAGS += -iquote $(srcdir) -iquote $(objdir) -iquote $(srcdir)/arch/$(ARCH)
+#COMMON_CFLAGS += -iquote $(srcdir) -iquote $(objdir) -iquote $(srcdir)/arch/$(ARCH)
+COMMON_CFLAGS += -iquote $(srcdir) -iquote $(objdir)
 #CFLAGS-DEBUG = -g -D_GNU_SOURCE $(CFLAGS_$@)
 COMMON_LDFLAGS := -lrt -ldl -pthread -Wl,-z,noexecstack $(LDFLAGS)
 ifneq ($(elfdir),)
@@ -70,19 +72,22 @@ COMMON_CFLAGS += -W -Wall -Wno-unused-parameter -Wno-missing-field-initializers
 # Note that the plain CFLAGS and LDFLAGS can be changed
 # by config/Makefile later but *_*FLAGS can not.
 #
-UFTRACE_CFLAGS     = $(COMMON_CFLAGS) $(CFLAGS_$@) $(CFLAGS_uftrace)
-DEMANGLER_CFLAGS   = $(COMMON_CFLAGS) $(CFLAGS_$@) $(CFLAGS_demangler)
-SYMBOLS_CFLAGS     = $(COMMON_CFLAGS) $(CFLAGS_$@) $(CFLAGS_symbols)
-TRACEEVENT_CFLAGS  = $(COMMON_CFLAGS) $(CFLAGS_$@) $(CFLAGS_traceevent)
-LIB_CFLAGS         = $(COMMON_CFLAGS) $(CFLAGS_$@) $(CFLAGS_lib)
+UFTRACE_CFLAGS     = $(COMMON_CFLAGS) $(FEATURE_CFLAGS) $(CFLAGS_$@) $(CFLAGS_uftrace) -iquote $(srcdir)/arch/$(ARCH)
+DEMANGLER_CFLAGS   = $(COMMON_CFLAGS) $(FEATURE_CFLAGS) $(CFLAGS_$@) $(CFLAGS_demangler)
+SYMBOLS_CFLAGS     = $(COMMON_CFLAGS) $(FEATURE_CFLAGS) $(CFLAGS_$@) $(CFLAGS_symbols)
+TRACEEVENT_CFLAGS  = $(COMMON_CFLAGS) $(FEATURE_CFLAGS) $(CFLAGS_$@) $(CFLAGS_traceevent)
+LIB_CFLAGS         = $(COMMON_CFLAGS) $(FEATURE_CFLAGS) $(CFLAGS_$@) $(CFLAGS_lib) -iquote $(srcdir)/arch/$(ARCH)
 LIB_CFLAGS        += -fPIC -fvisibility=hidden -fno-omit-frame-pointer
-TEST_CFLAGS        = $(COMMON_CFLAGS) -DUNIT_TEST
+LIB_COMPAT_CFLAGS  = $(COMMON_CFLAGS) $(CFLAGS_$@) $(CFLAGS_lib) -iquote $(srcdir)/arch/i386
+LIB_COMPAT_CFLAGS += -fPIC -fvisibility=hidden -fno-omit-frame-pointer
+TEST_CFLAGS        = $(COMMON_CFLAGS) $(FEATURE_CFLAGS) -DUNIT_TEST
 
-UFTRACE_LDFLAGS    = $(COMMON_LDFLAGS) $(LDFLAGS_$@) $(LDFLAGS_uftrace)
-DEMANGLER_LDFLAGS  = $(COMMON_LDFLAGS) $(LDFLAGS_$@) $(LDFLAGS_demangler)
-SYMBOLS_LDFLAGS    = $(COMMON_LDFLAGS) $(LDFLAGS_$@) $(LDFLAGS_symbols)
-LIB_LDFLAGS        = $(COMMON_LDFLAGS) $(LDFLAGS_$@) $(LDFLAGS_lib) -Wl,--no-undefined
-TEST_LDFLAGS       = $(COMMON_LDFLAGS) -L$(objdir)/libtraceevent -ltraceevent
+UFTRACE_LDFLAGS    = $(COMMON_LDFLAGS) $(FEATURE_LDFLAGS) $(LDFLAGS_$@) $(LDFLAGS_uftrace)
+DEMANGLER_LDFLAGS  = $(COMMON_LDFLAGS) $(FEATURE_LDFLAGS) $(LDFLAGS_$@) $(LDFLAGS_demangler)
+SYMBOLS_LDFLAGS    = $(COMMON_LDFLAGS) $(FEATURE_LDFLAGS) $(LDFLAGS_$@) $(LDFLAGS_symbols)
+LIB_LDFLAGS        = $(COMMON_LDFLAGS) $(FEATURE_LDFLAGS) $(LDFLAGS_$@) $(LDFLAGS_lib) -Wl,--no-undefined
+LIB_COMPAT_LDFLAGS = $(COMMON_LDFLAGS) $(LDFLAGS_$@) $(LDFLAGS_lib) -Wl,--no-undefined
+TEST_LDFLAGS       = $(COMMON_LDFLAGS) $(FEATURE_LDFLAGS) -L$(objdir)/libtraceevent -ltraceevent
 
 ifeq ($(DEBUG), 1)
   COMMON_CFLAGS += -O0 -g
@@ -131,7 +136,7 @@ ifneq ($(SAN),)
   TEST_CFLAGS       += $(SAN_CFLAGS)
 endif
 
-export UFTRACE_CFLAGS LIB_CFLAGS TEST_CFLAGS TEST_LDFLAGS
+export UFTRACE_CFLAGS LIB_CFLAGS LIB_COMPAT_CFLAGS LIB_COMPAT_LDFLAGS TEST_CFLAGS TEST_LDFLAGS
 
 VERSION_GIT := $(shell git describe --tags 2> /dev/null || echo v$(VERSION))
 
@@ -146,6 +151,7 @@ include $(srcdir)/Makefile.include
 
 LIBMCOUNT_TARGETS := libmcount/libmcount.so libmcount/libmcount-fast.so
 LIBMCOUNT_TARGETS += libmcount/libmcount-single.so libmcount/libmcount-fast-single.so
+LIBMCOUNT_TARGETS += libmcount/libmcount-compat.so
 
 _TARGETS := uftrace libtraceevent/libtraceevent.a
 _TARGETS += $(LIBMCOUNT_TARGETS) libmcount/libmcount-nop.so
@@ -173,13 +179,15 @@ SYMBOLS_OBJS := $(patsubst $(srcdir)/%.c,$(objdir)/%.o,$(SYMBOLS_SRCS))
 UFTRACE_ARCH_OBJS := $(objdir)/arch/$(ARCH)/uftrace.o
 
 UFTRACE_HDRS := $(filter-out $(srcdir)/version.h,$(wildcard $(srcdir)/*.h $(srcdir)/utils/*.h))
-UFTRACE_HDRS += $(srcdir)/libmcount/mcount.h $(wildcard $(srcdir)/arch/$(ARCH)/*.h)
+#UFTRACE_HDRS += $(srcdir)/libmcount/mcount.h $(wildcard $(srcdir)/arch/$(ARCH)/*.h)
+UFTRACE_HDRS += $(srcdir)/libmcount/mcount.h
 
 LIBMCOUNT_SRCS := $(filter-out %-nop.c,$(wildcard $(srcdir)/libmcount/*.c))
 LIBMCOUNT_OBJS := $(patsubst $(srcdir)/%.c,$(objdir)/%.op,$(LIBMCOUNT_SRCS))
 LIBMCOUNT_FAST_OBJS := $(patsubst $(objdir)/%.op,$(objdir)/%-fast.op,$(LIBMCOUNT_OBJS))
 LIBMCOUNT_SINGLE_OBJS := $(patsubst $(objdir)/%.op,$(objdir)/%-single.op,$(LIBMCOUNT_OBJS))
 LIBMCOUNT_FAST_SINGLE_OBJS := $(patsubst $(objdir)/%.op,$(objdir)/%-fast-single.op,$(LIBMCOUNT_OBJS))
+LIBMCOUNT_COMPAT_OBJS := $(patsubst $(objdir)/%.op,$(objdir)/%-compat.op,$(LIBMCOUNT_OBJS))
 
 LIBMCOUNT_UTILS_SRCS += $(srcdir)/utils/debug.c $(srcdir)/utils/regs.c
 LIBMCOUNT_UTILS_SRCS += $(srcdir)/utils/rbtree.c $(srcdir)/utils/filter.c
@@ -188,14 +196,18 @@ LIBMCOUNT_UTILS_SRCS += $(srcdir)/utils/script.c $(srcdir)/utils/script-python.c
 LIBMCOUNT_UTILS_SRCS += $(srcdir)/utils/auto-args.c $(srcdir)/utils/dwarf.c
 LIBMCOUNT_UTILS_SRCS += $(wildcard $(srcdir)/utils/symbol*.c)
 LIBMCOUNT_UTILS_OBJS := $(patsubst $(srcdir)/utils/%.c,$(objdir)/libmcount/%.op,$(LIBMCOUNT_UTILS_SRCS))
+LIBMCOUNT_UTILS_COMPAT_OBJS := $(patsubst $(srcdir)/utils/%.c,$(objdir)/libmcount/%-compat.op,$(LIBMCOUNT_UTILS_SRCS))
 
 LIBMCOUNT_NOP_SRCS := $(srcdir)/libmcount/mcount-nop.c
 LIBMCOUNT_NOP_OBJS := $(patsubst $(srcdir)/%.c,$(objdir)/%.op,$(LIBMCOUNT_NOP_SRCS))
 
 LIBMCOUNT_ARCH_OBJS := $(objdir)/arch/$(ARCH)/mcount-entry.op
+LIBMCOUNT_ARCH_COMPAT_OBJS := $(objdir)/arch/i386/mcount-entry.op
 
+#UFTRACE_HDRS += $(srcdir)/libmcount/mcount.h $(wildcard $(srcdir)/arch/$(ARCH)/*.h)
 COMMON_DEPS := $(objdir)/.config $(UFTRACE_HDRS)
-LIBMCOUNT_DEPS := $(COMMON_DEPS) $(srcdir)/libmcount/internal.h
+LIBMCOUNT_DEPS := $(COMMON_DEPS) $(srcdir)/libmcount/internal.h $(wildcard $(srcdir)/arch/$(ARCH)/*.h)
+LIBMCOUNT_COMPAT_DEPS := $(COMMON_DEPS) $(srcdir)/libmcount/internal.h $(wildcard $(srcdir)/arch/i386/*.h)
 
 CFLAGS_$(objdir)/mcount.op = -pthread
 CFLAGS_$(objdir)/cmds/record.o = -DINSTALL_LIB_PATH='"$(libdir)"'
@@ -205,6 +217,7 @@ LDFLAGS_$(objdir)/uftrace = -L$(objdir)/libtraceevent -ltraceevent -ldl
 LIBMCOUNT_FAST_CFLAGS := -DDISABLE_MCOUNT_FILTER
 LIBMCOUNT_SINGLE_CFLAGS := -DSINGLE_THREAD
 LIBMCOUNT_FAST_SINGLE_CFLAGS := -DDISABLE_MCOUNT_FILTER -DSINGLE_THREAD
+LIBMCOUNT_COMPAT_CFLAGS := -m32
 
 CFLAGS_$(objdir)/utils/demangle.o  = -Wno-unused-value
 CFLAGS_$(objdir)/utils/demangle.op = -Wno-unused-value
@@ -227,6 +240,9 @@ config: $(srcdir)/configure
 $(LIBMCOUNT_UTILS_OBJS): $(objdir)/libmcount/%.op: $(srcdir)/utils/%.c $(LIBMCOUNT_DEPS)
 	$(QUIET_CC_FPIC)$(CC) $(LIB_CFLAGS) -c -o $@ $<
 
+$(LIBMCOUNT_UTILS_COMPAT_OBJS): $(objdir)/libmcount/%-compat.op: $(srcdir)/utils/%.c $(LIBMCOUNT_COMPAT_DEPS)
+	$(QUIET_CC_FPIC)$(CC) $(LIB_COMPAT_CFLAGS) -m32 -c -o $@ $<
+
 $(objdir)/libmcount/mcount.op: $(objdir)/version.h 
 
 $(LIBMCOUNT_OBJS): $(objdir)/%.op: $(srcdir)/%.c $(LIBMCOUNT_DEPS)
@@ -244,6 +260,9 @@ $(LIBMCOUNT_FAST_SINGLE_OBJS): $(objdir)/%-fast-single.op: $(srcdir)/%.c $(LIBMC
 $(LIBMCOUNT_NOP_OBJS): $(objdir)/%.op: $(srcdir)/%.c $(LIBMCOUNT_DEPS)
 	$(QUIET_CC_FPIC)$(CC) $(LIB_CFLAGS) -c -o $@ $<
 
+$(LIBMCOUNT_COMPAT_OBJS): $(objdir)/%-compat.op: $(srcdir)/%.c $(LIBMCOUNT_DEPS)
+	$(QUIET_CC_FPIC)$(CC) $(LIB_COMPAT_CFLAGS) $(LIBMCOUNT_COMPAT_CFLAGS) -c -o $@ $<
+
 $(objdir)/libmcount/libmcount.so: $(LIBMCOUNT_OBJS) $(LIBMCOUNT_UTILS_OBJS) $(LIBMCOUNT_ARCH_OBJS)
 	$(QUIET_LINK)$(CC) -shared -o $@ $^ $(LIB_LDFLAGS)
 
@@ -259,8 +278,14 @@ $(objdir)/libmcount/libmcount-fast-single.so: $(LIBMCOUNT_FAST_SINGLE_OBJS) $(LI
 $(objdir)/libmcount/libmcount-nop.so: $(LIBMCOUNT_NOP_OBJS)
 	$(QUIET_LINK)$(CC) -shared -o $@ $^ $(LIB_LDFLAGS)
 
+$(objdir)/libmcount/libmcount-compat.so: $(LIBMCOUNT_COMPAT_OBJS) $(LIBMCOUNT_UTILS_COMPAT_OBJS) $(LIBMCOUNT_ARCH_COMPAT_OBJS)
+	$(QUIET_LINK)$(CC) -m32 -shared -o $@ $^ $(LIB_COMPAT_LDFLAGS)
+
 $(LIBMCOUNT_ARCH_OBJS): $(wildcard $(srcdir)/arch/$(ARCH)/*.[cS]) $(LIBMCOUNT_DEPS)
 	@$(MAKE) -B -C $(srcdir)/arch/$(ARCH) $@
+
+$(LIBMCOUNT_ARCH_COMPAT_OBJS): $(wildcard $(srcdir)/arch/i386/*.[cS]) $(LIBMCOUNT_DEPS)
+	@$(MAKE) -B -C $(srcdir)/arch/i386 $@
 
 $(UFTRACE_ARCH_OBJS): $(wildcard $(srcdir)/arch/$(ARCH)/*.[cS]) $(COMMON_DEPS)
 	@$(MAKE) -B -C $(srcdir)/arch/$(ARCH) $@
@@ -316,6 +341,7 @@ endif
 	$(Q)$(INSTALL) $(objdir)/libmcount/libmcount-fast.so $(DESTDIR)$(libdir)/libmcount-fast.so
 	$(Q)$(INSTALL) $(objdir)/libmcount/libmcount-single.so $(DESTDIR)$(libdir)/libmcount-single.so
 	$(Q)$(INSTALL) $(objdir)/libmcount/libmcount-fast-single.so $(DESTDIR)$(libdir)/libmcount-fast-single.so
+	$(Q)$(INSTALL) $(objdir)/libmcount/libmcount-compat.so $(DESTDIR)$(libdir)/libmcount-compat.so
 	$(call QUIET_INSTALL, bash-completion)
 	$(Q)$(INSTALL) -m 644 $(srcdir)/misc/bash-completion.sh $(DESTDIR)$(etcdir)/bash_completion.d/uftrace
 	@$(MAKE) -sC $(docdir) install DESTDIR=$(DESTDIR)$(mandir)
@@ -334,6 +360,8 @@ uninstall:
 	$(Q)$(RM) $(DESTDIR)$(libdir)/libmcount-single.so
 	$(call QUIET_UNINSTALL, libmcount-fast-single)
 	$(Q)$(RM) $(DESTDIR)$(libdir)/libmcount-fast-single.so
+	$(call QUIET_UNINSTALL, libmcount-compat)
+	$(Q)$(RM) $(DESTDIR)$(libdir)/libmcount-compat.so
 	$(call QUIET_UNINSTALL, bash-completion)
 	$(Q)$(RM) $(DESTDIR)$(etcdir)/bash_completion.d/uftrace
 	@$(MAKE) -sC $(docdir) uninstall DESTDIR=$(DESTDIR)$(mandir)

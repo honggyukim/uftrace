@@ -22,13 +22,13 @@ $(odir)/uftrace.o: $(ARCH_UFTRACE_OBJS)
 	$(QUIET_LINK)$(LD) $(LINKFLAGS) -o $@ $^
 
 $(odir)/%.op: $(sdir)/%.S
-	$(QUIET_ASM)$(CC) $(LIB_CFLAGS) -c -o $@ $<
+	$(QUIET_ASM)$(CC) $(LIB_COMPAT_CFLAGS) -m32 -c -o $@ $<
 
 $(odir)/%.op: $(sdir)/%.c
-	$(QUIET_CC_FPIC)$(CC) $(LIB_CFLAGS) -c -o $@ $<
+	$(QUIET_CC_FPIC)$(CC) $(LIB_COMPAT_CFLAGS) -m32 -c -o $@ $<
 
 $(odir)/%.o: $(sdir)/%.c
-	$(QUIET_CC)$(CC) $(UFTRACE_CFLAGS) -c -o $@ $<
+	$(QUIET_CC)$(CC) $(UFTRACE_CFLAGS) -m32 -c -o $@ $<
 
 clean:
 	$(RM) $(odir)/*.op $(odir)/*.o

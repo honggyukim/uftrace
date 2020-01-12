@@ -7,8 +7,8 @@ ifneq ($(wildcard $(srcdir)/check-deps/cc_has_mfentry),)
 endif
 
 ifneq ($(wildcard $(srcdir)/check-deps/cxa_demangle),)
-  COMMON_CFLAGS  += -DHAVE_CXA_DEMANGLE
-  COMMON_LDFLAGS += -lstdc++
+  FEATURE_CFLAGS  += -DHAVE_CXA_DEMANGLE
+  FEATURE_LDFLAGS += -lstdc++
 endif
 
 ifneq ($(wildcard $(srcdir)/check-deps/cc_has_mno_sse2),)
@@ -16,50 +16,50 @@ ifneq ($(wildcard $(srcdir)/check-deps/cc_has_mno_sse2),)
 endif
 
 ifneq ($(wildcard $(srcdir)/check-deps/have_libpython3),)
-  COMMON_CFLAGS += -DHAVE_LIBPYTHON3
-  COMMON_CFLAGS += -I $(shell python3 -c 'import sysconfig; print(sysconfig.get_config_vars()["INCLUDEPY"])')
-  COMMON_CFLAGS += -DLIBPYTHON3_VERSION=$(shell python3 -c 'import sysconfig; print(sysconfig.get_config_vars()["LDVERSION"])')
+  FEATURE_CFLAGS += -DHAVE_LIBPYTHON3
+  FEATURE_CFLAGS += -I $(shell python3 -c 'import sysconfig; print(sysconfig.get_config_vars()["INCLUDEPY"])')
+  FEATURE_CFLAGS += -DLIBPYTHON3_VERSION=$(shell python3 -c 'import sysconfig; print(sysconfig.get_config_vars()["LDVERSION"])')
 else ifneq ($(wildcard $(srcdir)/check-deps/have_libpython2.7),)
-  COMMON_CFLAGS += -DHAVE_LIBPYTHON2
-  COMMON_CFLAGS += -I/usr/include/python2.7
+  FEATURE_CFLAGS += -DHAVE_LIBPYTHON2
+  FEATURE_CFLAGS += -I/usr/include/python2.7
 endif
 
 ifneq ($(wildcard $(srcdir)/check-deps/have_libluajit),)
-  COMMON_CFLAGS += -DHAVE_LIBLUAJIT
-  COMMON_CFLAGS += $(shell pkg-config --cflags luajit)
+  FEATURE_CFLAGS += -DHAVE_LIBLUAJIT
+  FEATURE_CFLAGS += $(shell pkg-config --cflags luajit)
 endif
 
 ifneq ($(wildcard $(srcdir)/check-deps/perf_clockid),)
-  COMMON_CFLAGS += -DHAVE_PERF_CLOCKID
+  FEATURE_CFLAGS += -DHAVE_PERF_CLOCKID
 endif
 
 ifneq ($(wildcard $(srcdir)/check-deps/perf_context_switch),)
-  COMMON_CFLAGS += -DHAVE_PERF_CTXSW
+  FEATURE_CFLAGS += -DHAVE_PERF_CTXSW
 endif
 
 ifneq ($(wildcard $(srcdir)/check-deps/arm_has_hardfp),)
-  COMMON_CFLAGS += -DHAVE_ARM_HARDFP
+  FEATURE_CFLAGS += -DHAVE_ARM_HARDFP
 endif
 
 ifneq ($(wildcard $(srcdir)/check-deps/have_libncurses),)
-  COMMON_CFLAGS   += -DHAVE_LIBNCURSES $(shell pkg-config --cflags ncursesw)
+  FEATURE_CFLAGS   += -DHAVE_LIBNCURSES $(shell pkg-config --cflags ncursesw)
   UFTRACE_LDFLAGS += $(shell pkg-config --libs ncursesw)
   TEST_LDFLAGS    += $(shell pkg-config --libs ncursesw)
 endif
 
 ifneq ($(wildcard $(srcdir)/check-deps/have_libelf),)
-  COMMON_CFLAGS  += -DHAVE_LIBELF
-  COMMON_LDFLAGS += -lelf
+  FEATURE_CFLAGS  += -DHAVE_LIBELF
+  FEATURE_LDFLAGS += -lelf
 endif
 
 ifneq ($(wildcard $(srcdir)/check-deps/have_libdw),)
-  COMMON_CFLAGS  += -DHAVE_LIBDW
-  COMMON_CFLAGS  += $(shell pkg-config --cflags libdw 2> /dev/null)
-  COMMON_LDFLAGS += $(shell pkg-config --libs libdw 2> /dev/null || echo "-ldw")
+  FEATURE_CFLAGS  += -DHAVE_LIBDW
+  FEATURE_CFLAGS  += $(shell pkg-config --cflags libdw 2> /dev/null)
+  FEATURE_LDFLAGS += $(shell pkg-config --libs libdw 2> /dev/null || echo "-ldw")
 endif
 
 ifneq ($(wildcard $(srcdir)/check-deps/have_libcapstone),)
-  COMMON_CFLAGS  += -DHAVE_LIBCAPSTONE
-  COMMON_CFLAGS  += $(shell pkg-config --cflags capstone 2> /dev/null)
-  COMMON_LDFLAGS += $(shell pkg-config --libs capstone 2> /dev/null)
+  FEATURE_CFLAGS  += -DHAVE_LIBCAPSTONE
+  FEATURE_CFLAGS  += $(shell pkg-config --cflags capstone 2> /dev/null)
+  FEATURE_LDFLAGS += $(shell pkg-config --libs capstone 2> /dev/null)
 endif
