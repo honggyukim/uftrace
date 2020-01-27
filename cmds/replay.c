@@ -229,7 +229,10 @@ static void setup_default_field(struct list_head *fields, struct opts *opts)
 		else
 			add_field(fields, field_table[REPLAY_F_TIMESTAMP]);
 	}
-	add_field(fields, field_table[REPLAY_F_DURATION]);
+	if (opts->flat)
+		add_field(fields, field_table[REPLAY_F_ELAPSED]);
+	else
+		add_field(fields, field_table[REPLAY_F_DURATION]);
 	add_field(fields, field_table[REPLAY_F_TID]);
 }
 
@@ -379,6 +382,7 @@ static void print_event(struct uftrace_task_reader *task,
 	free(evt_name);
 }
 
+
 static void print_task_newline(int current_tid)
 {
 	if (prev_tid != -1 && current_tid != prev_tid) {
@@ -394,47 +398,184 @@ static int print_flat_rstack(struct uftrace_data *handle,
 			     struct uftrace_task_reader *task,
 			     struct opts *opts)
 {
-	static int count;
-	struct uftrace_record *rstack = task->rstack;
-	struct uftrace_session_link *sessions = &task->h->sessions;
+	struct uftrace_record *rstack;
+	struct uftrace_session_link *sessions = &handle->sessions;
 	struct sym *sym = NULL;
-	char *name;
-	struct fstack *fstack;
+	enum argspec_string_bits str_mode = 0;
+	char *symname = NULL;
+	char args[1024];
+	char *libname = "";
+	struct uftrace_mmap *map = NULL;
+
+	if (task == NULL)
+		return 0;
+
+	rstack = task->rstack;
+	if (rstack->type == UFTRACE_LOST)
+		goto lost;
 
 	sym = task_find_sym(sessions, task, rstack);
-	name = symbol_getname(sym, rstack->addr);
-	fstack = &task->func_stack[rstack->depth];
+	symname = symbol_getname(sym, rstack->addr);
 
 	/* skip it if --no-libcall is given */
 	if (!opts->libcall && sym && sym->type == ST_PLT_FUNC)
 		goto out;
 
-	switch (rstack->type) {
-	case UFTRACE_ENTRY:
-		pr_out("[%d] ==> %d/%d: ip (%s), time (%"PRIu64")\n",
-		       count++, task->tid, rstack->depth,
-		       name, rstack->time);
-		break;
+	if (rstack->type == UFTRACE_ENTRY) {
+		if (symname[strlen(symname) - 1] != ')' || rstack->more)
+			str_mode |= NEEDS_PAREN;
+	}
 
-	case UFTRACE_EXIT:
-		pr_out("[%d] <== %d/%d: ip (%s), time (%"PRIu64":%"PRIu64")\n",
-		       count++, task->tid, rstack->depth,
-		       name, rstack->time, fstack->total_time);
-		break;
+	task->timestamp_last = task->timestamp;
+	task->timestamp = rstack->time;
 
-	case UFTRACE_LOST:
-		pr_out("[%d] XXX %d: lost %d records\n",
-		       count++, task->tid, (int)rstack->addr);
-		break;
+	if (opts->libname && sym && sym->type == ST_PLT_FUNC) {
+		struct uftrace_session *s;
 
-	case UFTRACE_EVENT:
-		pr_out("[%d] !!! %d: ", count++, task->tid);
-		print_event(task, rstack, task->event_color);
-		pr_out(" time (%"PRIu64")\n", rstack->time);
-		break;
+		s = find_task_session(sessions, task->t, rstack->time);
+		if (s != NULL) {
+			map = find_symbol_map(&s->symtabs, symname);
+			if (map != NULL)
+				libname = basename(map->libname);
+		}
+	}
+
+	if (rstack->type == UFTRACE_ENTRY) {
+		struct fstack *fstack;
+		struct uftrace_trigger tr = {
+			.flags = 0,
+		};
+		int ret;
+
+		ret = fstack_entry(task, rstack, &tr);
+		if (ret < 0)
+			goto out;
+
+		/* give a new line when tid is changed */
+		if (opts->task_newline)
+			print_task_newline(task->tid);
+
+		if (tr.flags & TRIGGER_FL_COLOR)
+			task->event_color = tr.color;
+		else
+			task->event_color = DEFAULT_EVENT_COLOR;
+
+		if (rstack->more)
+			str_mode |= HAS_MORE;
+		get_argspec_string(task, args, sizeof(args), str_mode);
+
+		fstack = &task->func_stack[task->stack_count - 1];
+
+		/* function entry */
+		print_field(task, fstack, NO_TIME);
+		if (tr.flags & TRIGGER_FL_COLOR) {
+			pr_color(tr.color, "%s", symname);
+			if (*libname)
+				pr_color(tr.color, "@%s", libname);
+			pr_out("%s\n", args);
+		}
+		else {
+			pr_out("%s%s%s%s\n", symname,
+			       *libname ? "@" : "", libname, args);
+		}
+
+		fstack_update(UFTRACE_ENTRY, task, fstack);
+	}
+	else if (rstack->type == UFTRACE_EXIT) {
+		struct fstack *fstack;
+
+		/* function exit */
+		fstack = &task->func_stack[task->stack_count];
+
+		if (!(fstack->flags & FSTACK_FL_NORECORD) && fstack_enabled) {
+			char *retval = args;
+
+			str_mode = IS_RETVAL;
+			if (rstack->more)
+				str_mode |= HAS_MORE;
+
+			get_argspec_string(task, retval, sizeof(args), str_mode);
+
+			/* give a new line when tid is changed */
+			if (opts->task_newline)
+				print_task_newline(task->tid);
+
+			print_field(task, fstack, NULL);
+
+			pr_out("%s%s%s() returns %s\n", symname,
+				*libname ? "@" : "", libname, retval);
+		}
+
+		fstack_exit(task);
+	}
+	else if (rstack->type == UFTRACE_LOST) {
+		int losts;
+lost:
+		losts = (int)rstack->addr;
+
+		/* skip kernel lost messages outside of user functions */
+		if (opts->kernel_skip_out && task->user_stack_count == 0)
+			return 0;
+
+		/* give a new line when tid is changed */
+		if (opts->task_newline)
+			print_task_newline(task->tid);
+
+		print_field(task, NULL, NO_TIME);
+
+		if (losts > 0)
+			pr_red("/* LOST %d records!! */\n", losts);
+		else /* kernel sometimes have unknown count */
+			pr_red("/* LOST some records!! */\n");
+		return 0;
+	}
+	else if (rstack->type == UFTRACE_EVENT) {
+		struct fstack *fstack;
+		struct uftrace_task_reader *next = NULL;
+		struct uftrace_record rec = *rstack;
+		uint64_t evt_id = rstack->addr;
+
+		if (!fstack_check_filter(task))
+			goto out;
+
+		/* give a new line when tid is changed */
+		if (opts->task_newline)
+			print_task_newline(task->tid);
+
+		/*
+		 * try to merge a subsequent sched-in event:
+		 * it might overwrite rstack - use (saved) rec for printing.
+		 */
+		if (evt_id == EVENT_ID_PERF_SCHED_OUT && !opts->no_merge)
+			next = fstack_skip(handle, task, 0, opts);
+
+		if (task == next &&
+		    next->rstack->addr == EVENT_ID_PERF_SCHED_IN) {
+			/* consume the matching sched-in record */
+			fstack_consume(handle, next);
+
+			rec.addr = sched_sym.addr;
+			evt_id = EVENT_ID_PERF_SCHED_IN;
+		}
+
+		/* for sched-in to show schedule duration */
+		fstack = &task->func_stack[task->stack_count];
+
+		if (!(fstack->flags & FSTACK_FL_NORECORD) && fstack_enabled) {
+			if (evt_id == EVENT_ID_PERF_SCHED_IN &&
+			    fstack->total_time)
+				print_field(task, fstack, NULL);
+			else
+				print_field(task, NULL, NO_TIME);
+
+			pr_color(task->event_color, "/* ");
+			print_event(task, &rec, task->event_color);
+			pr_color(task->event_color, " */\n");
+		}
+
 	}
 out:
-	symbol_putname(sym, name);
+	symbol_putname(sym, symname);
 	return 0;
 }
 
@@ -1144,7 +1285,7 @@ int command_replay(int argc, char *argv[], struct opts *opts)
 	setup_field(&output_fields, opts, &setup_default_field,
 		    field_table, ARRAY_SIZE(field_table));
 
-	if (!opts->flat && peek_rstack(&handle, &task) == 0)
+	if (peek_rstack(&handle, &task) == 0)
 		print_header(&output_fields, "#", "FUNCTION", 1);
 
 	while (read_rstack(&handle, &task) == 0 && !uftrace_done) {
@@ -1174,7 +1315,8 @@ int command_replay(int argc, char *argv[], struct opts *opts)
 			break;
 	}
 
-	print_remaining_stack(opts, &handle);
+	if (!opts->flat)
+		print_remaining_stack(opts, &handle);
 
 	close_data_file(opts, &handle);
 
