@@ -1403,6 +1403,9 @@ int command_replay(int argc, char *argv[], struct opts *opts)
 		return -1;
 	}
 
+	if (handle.hdr.feat_mask & FLAT)
+		opts->flat = true;
+
 	fstack_setup_filters(opts, &handle);
 	setup_field(&output_fields, opts, &setup_default_field,
 		    field_table, ARRAY_SIZE(field_table));
