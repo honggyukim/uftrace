@@ -55,9 +55,7 @@ INSTALL = install
 
 export ARCH CC AR LD RM srcdir objdir LDFLAGS
 
-FEATURE_CFLAGS :=
 COMMON_CFLAGS := -D_GNU_SOURCE $(CFLAGS) $(CPPFLAGS)
-#COMMON_CFLAGS += -iquote $(srcdir) -iquote $(objdir) -iquote $(srcdir)/arch/$(ARCH)
 COMMON_CFLAGS += -iquote $(srcdir) -iquote $(objdir)
 #CFLAGS-DEBUG = -g -D_GNU_SOURCE $(CFLAGS_$@)
 COMMON_LDFLAGS := -lrt -ldl -pthread -Wl,-z,noexecstack $(LDFLAGS)
@@ -72,22 +70,22 @@ COMMON_CFLAGS += -W -Wall -Wno-unused-parameter -Wno-missing-field-initializers
 # Note that the plain CFLAGS and LDFLAGS can be changed
 # by config/Makefile later but *_*FLAGS can not.
 #
-UFTRACE_CFLAGS     = $(COMMON_CFLAGS) $(FEATURE_CFLAGS) $(CFLAGS_$@) $(CFLAGS_uftrace) -iquote $(srcdir)/arch/$(ARCH)
-DEMANGLER_CFLAGS   = $(COMMON_CFLAGS) $(FEATURE_CFLAGS) $(CFLAGS_$@) $(CFLAGS_demangler)
-SYMBOLS_CFLAGS     = $(COMMON_CFLAGS) $(FEATURE_CFLAGS) $(CFLAGS_$@) $(CFLAGS_symbols)
-TRACEEVENT_CFLAGS  = $(COMMON_CFLAGS) $(FEATURE_CFLAGS) $(CFLAGS_$@) $(CFLAGS_traceevent)
-LIB_CFLAGS         = $(COMMON_CFLAGS) $(FEATURE_CFLAGS) $(CFLAGS_$@) $(CFLAGS_lib) -iquote $(srcdir)/arch/$(ARCH)
+UFTRACE_CFLAGS     = $(COMMON_CFLAGS) $(CFLAGS_$@) $(CFLAGS_uftrace) -iquote $(srcdir)/arch/$(ARCH)
+DEMANGLER_CFLAGS   = $(COMMON_CFLAGS) $(CFLAGS_$@) $(CFLAGS_demangler)
+SYMBOLS_CFLAGS     = $(COMMON_CFLAGS) $(CFLAGS_$@) $(CFLAGS_symbols)
+TRACEEVENT_CFLAGS  = $(COMMON_CFLAGS) $(CFLAGS_$@) $(CFLAGS_traceevent)
+LIB_CFLAGS         = $(COMMON_CFLAGS) $(CFLAGS_$@) $(CFLAGS_lib) -iquote $(srcdir)/arch/$(ARCH)
 LIB_CFLAGS        += -fPIC -fvisibility=hidden -fno-omit-frame-pointer
 LIB_COMPAT_CFLAGS  = $(COMMON_CFLAGS) $(CFLAGS_$@) $(CFLAGS_lib) -iquote $(srcdir)/arch/i386
 LIB_COMPAT_CFLAGS += -fPIC -fvisibility=hidden -fno-omit-frame-pointer
-TEST_CFLAGS        = $(COMMON_CFLAGS) $(FEATURE_CFLAGS) -DUNIT_TEST
+TEST_CFLAGS        = $(COMMON_CFLAGS) -DUNIT_TEST
 
-UFTRACE_LDFLAGS    = $(COMMON_LDFLAGS) $(FEATURE_LDFLAGS) $(LDFLAGS_$@) $(LDFLAGS_uftrace)
-DEMANGLER_LDFLAGS  = $(COMMON_LDFLAGS) $(FEATURE_LDFLAGS) $(LDFLAGS_$@) $(LDFLAGS_demangler)
-SYMBOLS_LDFLAGS    = $(COMMON_LDFLAGS) $(FEATURE_LDFLAGS) $(LDFLAGS_$@) $(LDFLAGS_symbols)
-LIB_LDFLAGS        = $(COMMON_LDFLAGS) $(FEATURE_LDFLAGS) $(LDFLAGS_$@) $(LDFLAGS_lib) -Wl,--no-undefined
+UFTRACE_LDFLAGS    = $(COMMON_LDFLAGS) $(LDFLAGS_$@) $(LDFLAGS_uftrace)
+DEMANGLER_LDFLAGS  = $(COMMON_LDFLAGS) $(LDFLAGS_$@) $(LDFLAGS_demangler)
+SYMBOLS_LDFLAGS    = $(COMMON_LDFLAGS) $(LDFLAGS_$@) $(LDFLAGS_symbols)
+LIB_LDFLAGS        = $(COMMON_LDFLAGS) $(LDFLAGS_$@) $(LDFLAGS_lib) -Wl,--no-undefined
 LIB_COMPAT_LDFLAGS = $(COMMON_LDFLAGS) $(LDFLAGS_$@) $(LDFLAGS_lib) -Wl,--no-undefined
-TEST_LDFLAGS       = $(COMMON_LDFLAGS) $(FEATURE_LDFLAGS) -L$(objdir)/libtraceevent -ltraceevent
+TEST_LDFLAGS       = $(COMMON_LDFLAGS) -L$(objdir)/libtraceevent -ltraceevent
 
 ifeq ($(DEBUG), 1)
   COMMON_CFLAGS += -O0 -g
@@ -179,7 +177,6 @@ SYMBOLS_OBJS := $(patsubst $(srcdir)/%.c,$(objdir)/%.o,$(SYMBOLS_SRCS))
 UFTRACE_ARCH_OBJS := $(objdir)/arch/$(ARCH)/uftrace.o
 
 UFTRACE_HDRS := $(filter-out $(srcdir)/version.h,$(wildcard $(srcdir)/*.h $(srcdir)/utils/*.h))
-#UFTRACE_HDRS += $(srcdir)/libmcount/mcount.h $(wildcard $(srcdir)/arch/$(ARCH)/*.h)
 UFTRACE_HDRS += $(srcdir)/libmcount/mcount.h
 
 LIBMCOUNT_SRCS := $(filter-out %-nop.c,$(wildcard $(srcdir)/libmcount/*.c))
@@ -204,7 +201,6 @@ LIBMCOUNT_NOP_OBJS := $(patsubst $(srcdir)/%.c,$(objdir)/%.op,$(LIBMCOUNT_NOP_SR
 LIBMCOUNT_ARCH_OBJS := $(objdir)/arch/$(ARCH)/mcount-entry.op
 LIBMCOUNT_ARCH_COMPAT_OBJS := $(objdir)/arch/i386/mcount-entry.op
 
-#UFTRACE_HDRS += $(srcdir)/libmcount/mcount.h $(wildcard $(srcdir)/arch/$(ARCH)/*.h)
 COMMON_DEPS := $(objdir)/.config $(UFTRACE_HDRS)
 LIBMCOUNT_DEPS := $(COMMON_DEPS) $(srcdir)/libmcount/internal.h $(wildcard $(srcdir)/arch/$(ARCH)/*.h)
 LIBMCOUNT_COMPAT_DEPS := $(COMMON_DEPS) $(srcdir)/libmcount/internal.h $(wildcard $(srcdir)/arch/i386/*.h)
