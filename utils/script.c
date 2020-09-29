@@ -17,6 +17,7 @@
 #include "utils/utils.h"
 #include "utils/script-python.h"
 #include "utils/script-luajit.h"
+#include "utils/script-native.h"
 
 /* This will be set by getenv("UFTRACE_SCRIPT"). */
 char *script_str;
@@ -49,6 +50,8 @@ enum script_type_t get_script_type(const char *str)
 		return SCRIPT_PYTHON;
 	else if (!strcmp(ext, ".lua"))
 		return SCRIPT_LUAJIT;
+	else if (!strcmp(ext, ".so"))
+		return SCRIPT_NATIVE;
 	else if (!strcmp(ext, ".testing"))
 		return SCRIPT_TESTING;
 
@@ -146,6 +149,12 @@ int script_init(struct uftrace_script_info *info, enum uftrace_pattern_type ptyp
 			script_pathname = NULL;
 		}
 		break;
+	case SCRIPT_NATIVE:
+		if (script_init_for_native(info, ptype) < 0) {
+			pr_warn("failed to init native scripting\n");
+			script_pathname = NULL;
+		}
+		break;
 	case SCRIPT_TESTING:
 		if (script_init_for_testing(info, ptype) < 0) {
 			pr_warn("failed to init test scripting\n");
@@ -172,6 +181,9 @@ void script_finish(void)
 		break;
 	case SCRIPT_LUAJIT:
 		script_finish_for_luajit();
+		break;
+	case SCRIPT_NATIVE:
+		script_finish_for_native();
 		break;
 	case SCRIPT_TESTING:
 		script_finish_for_testing();
