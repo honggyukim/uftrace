@@ -1166,8 +1166,13 @@ void parse_script_opt(struct uftrace_opts *opts)
 	size_t len = 0;
 	static const char optname[] = "uftrace-option";
 	enum script_type_t script_type;
-	const char *comments[SCRIPT_TYPE_COUNT] = { "", "#", "--" };
-	const char *comment;
+	const char* comments[SCRIPT_TYPE_COUNT] = {
+		"",
+		"#",
+		"--",
+		"//",
+	};
+	const char* comment;
 	size_t comment_len;
 
 	if (opts->script_file == NULL)
