@@ -1716,12 +1716,10 @@ static void mcount_script_init(enum uftrace_pattern_type patt_type)
 
 	cmds_str = getenv("UFTRACE_ARGS");
 	if (cmds_str)
-		strv_split(&info.cmds, cmds_str, "\n");
+		info.cmds = cmds_str;
 
 	if (script_init(&info, patt_type) < 0)
 		script_str = NULL;
-
-	strv_free(&info.cmds);
 }
 
 static int agent_init(struct sockaddr_un *addr)
