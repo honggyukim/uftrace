@@ -534,7 +534,7 @@ static void mcount_trace_finish(bool send_msg)
 		goto unlock;
 
 	/* dtor for script support */
-	if (SCRIPT_ENABLED && script_str)
+	if (SCRIPT_ENABLED && script_str && script_uftrace_end)
 		script_uftrace_end();
 
 	/* notify to uftrace that we're finished */
@@ -1708,12 +1708,10 @@ static void mcount_script_init(enum uftrace_pattern_type patt_type)
 
 	cmds_str = getenv("UFTRACE_ARGS");
 	if (cmds_str)
-		strv_split(&info.cmds, cmds_str, "\n");
+		info.cmds = cmds_str;
 
 	if (script_init(&info, patt_type) < 0)
 		script_str = NULL;
-
-	strv_free(&info.cmds);
 }
 
 static __used void mcount_startup(void)

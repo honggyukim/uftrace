@@ -101,11 +101,19 @@ void script_finish_filter(void)
 static int script_init_for_testing(struct uftrace_script_info *info,
 				   enum uftrace_pattern_type ptype)
 {
+	struct strv sv = {
+		0,
+	};
 	int i;
 	char *name;
 
-	strv_for_each(&info->cmds, name, i)
+	if (info->cmds)
+		strv_split(&sv, info->cmds, "\n");
+
+	strv_for_each(&sv, name, i)
 		script_add_filter(name, ptype);
+
+	strv_free(&sv);
 
 	return 0;
 }
@@ -179,6 +187,7 @@ void script_finish(void)
 #include <stdio.h>
 
 #define SCRIPT_FILE "xxx.testing"
+#define TEST_CMDS "abc\nx*z"
 
 static int setup_testing_script(struct uftrace_script_info *info)
 {
@@ -190,8 +199,7 @@ static int setup_testing_script(struct uftrace_script_info *info)
 
 	fprintf(fp, "# uftrace script testing\n");
 
-	strv_append(&info->cmds, "abc");
-	strv_append(&info->cmds, "x*z");
+	info->cmds = TEST_CMDS;
 
 	fclose(fp);
 	return 0;
@@ -200,7 +208,6 @@ static int setup_testing_script(struct uftrace_script_info *info)
 static int cleanup_testing_script(struct uftrace_script_info *info)
 {
 	unlink(SCRIPT_FILE);
-	strv_free(&info->cmds);
 	return 0;
 }
 
