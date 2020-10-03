@@ -344,7 +344,7 @@ static char * opt_add_string(char *old_opt, char *new_opt)
 	return strjoin(old_opt, new_opt, ";");
 }
 
-static char * opt_add_prefix_string(char *old_opt, char *prefix, char *new_opt)
+static char * opt_add_prefix_string(char *old_opt, const char *prefix, char *new_opt)
 {
 	new_opt = strjoin(xstrdup(prefix), new_opt, "");
 
@@ -385,7 +385,7 @@ static enum color_setting parse_color(char *arg)
 	return COLOR_UNKNOWN;
 }
 
-static int parse_demangle(char *arg)
+static enum symbol_demangler parse_demangle(char *arg)
 {
 	size_t i;
 
@@ -978,7 +978,7 @@ static void update_subcmd(struct opts *opts, char *cmd)
 		opts->mode = UFTRACE_MODE_INVALID;
 }
 
-static void parse_opt_file(int *argc, char ***argv, char *filename, struct opts *opts)
+static void parse_opt_file(int *argc, char ***argv, const char *filename, struct opts *opts)
 {
 	int file_argc;
 	char **file_argv;
@@ -994,7 +994,7 @@ static void parse_opt_file(int *argc, char ***argv, char *filename, struct opts 
 	}
 
 	/* prepend dummy string since getopt_long cannot process argv[0] */
-	buf = xmalloc(stbuf.st_size + 9);
+	buf = (char*)xmalloc(stbuf.st_size + 9);
 	strncpy(buf, "uftrace ", 9);
 
 	fp = fopen(filename, "r");
@@ -1057,7 +1057,7 @@ static void parse_opt_file(int *argc, char ***argv, char *filename, struct opts 
 		opts->exename = file_argv[optind];
 
 		/* mark it to free at the end */
-		opts->opt_file = filename;
+		opts->opt_file = (char*)filename;
 	}
 	else {
 		opts->exename = orig_exename;
@@ -1210,7 +1210,7 @@ static int parse_options(int argc, char **argv, struct opts *opts)
 
 __used static void apply_default_opts(int *argc, char ***argv, struct opts *opts)
 {
-	char *basename = "default.opts";
+	const char *basename = "default.opts";
 	char opts_file[PATH_MAX];
 	struct stat stbuf;
 
@@ -1344,7 +1344,7 @@ int main(int argc, char *argv[])
 	if (opts.use_pager)
 		pager = setup_pager();
 
-	setup_color(opts.color, pager);
+	setup_color((enum color_setting)opts.color, pager);
 	setup_signal();
 
 	/* 'live' will start pager at its replay time */

@@ -200,7 +200,7 @@ extern void setup_signal(void);
 })
 
 #define xstrdup(s)							\
-({ 	void *__ptr = strdup(s);					\
+({ 	char *__ptr = strdup(s);					\
 	if (__ptr == NULL) {						\
 		pr_err("xstrdup");					\
 	}								\
@@ -208,7 +208,7 @@ extern void setup_signal(void);
 })
 
 #define xstrndup(s, sz)							\
-({ 	void *__ptr = strndup(s, sz);					\
+({ 	char *__ptr = strndup(s, sz);					\
 	if (__ptr == NULL) {						\
 		pr_err("xstrndup");					\
 	}								\
