@@ -98,7 +98,8 @@ void script_finish_filter(void)
 	}
 }
 
-static int script_init_for_testing(struct script_info *info, enum uftrace_pattern_type ptype)
+static int script_init_for_testing(struct uftrace_script_info *info,
+				   enum uftrace_pattern_type ptype)
 {
 	int i;
 	char *name;
@@ -113,7 +114,7 @@ static void script_finish_for_testing(void)
 {
 }
 
-int script_init(struct script_info *info, enum uftrace_pattern_type ptype)
+int script_init(struct uftrace_script_info *info, enum uftrace_pattern_type ptype)
 {
 	char *script_pathname = info->name;
 
@@ -179,7 +180,7 @@ void script_finish(void)
 
 #define SCRIPT_FILE "xxx.testing"
 
-static int setup_testing_script(struct script_info *info)
+static int setup_testing_script(struct uftrace_script_info *info)
 {
 	FILE *fp;
 
@@ -196,7 +197,7 @@ static int setup_testing_script(struct script_info *info)
 	return 0;
 }
 
-static int cleanup_testing_script(struct script_info *info)
+static int cleanup_testing_script(struct uftrace_script_info *info)
 {
 	unlink(SCRIPT_FILE);
 	strv_free(&info->cmds);
@@ -205,7 +206,7 @@ static int cleanup_testing_script(struct script_info *info)
 
 TEST_CASE(script_init)
 {
-	struct script_info info = {
+	struct uftrace_script_info info = {
 		.version = "UFTRACE_VERSION",
 		.name = SCRIPT_FILE,
 	};
