@@ -1,10 +1,10 @@
 uftrace v0.10
 =============
 * new options
-  --estimate-return to avoid return address hooking
-  -H/--hide to not display unwanted symbols
-  --no-sched to suppress scheduler events
-  --srcline supports report/replay/graph (by Eunseon)
+  --estimate-return to avoid return address hooking [#1097]
+  -H/--hide to not display unwanted symbols [#1217]
+  --no-sched to suppress scheduler events [#1245]
+  --srcline supports report/replay/graph (by Eunseon) [#1133, #1165, #1175]
 
 * dynamic tracing update (mostly by Hanbum)
   convert to hash map to find saved code
