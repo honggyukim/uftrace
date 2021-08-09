@@ -1133,6 +1133,27 @@ void process_uftrace_info(struct uftrace_data *handle, struct opts *opts,
 		       info->rblock, info->wblock);
 	}
 	process(data, "\n");
+
+	snprintf(buf, sizeof(buf), "%s/note.txt", opts->dirname);
+	if (!access(buf, F_OK)) {
+		long size;
+		FILE *fp;
+		char *note_buf;
+
+		fp = fopen(buf, "r");
+		fseek(fp, 0, SEEK_END);
+		size = ftell(fp);
+		rewind(fp);
+
+		note_buf = xmalloc(size + 1);
+		if (fread(note_buf, 1, size, fp) != (size_t)size)
+			pr_dbg("couldn't read the whole note.txt contents");
+		fclose(fp);
+
+		process(data, "# extra note information\n");
+		process(data, "# ======================\n");
+		puts(note_buf);
+	}
 }
 
 static void print_task(struct uftrace_data *handle, struct uftrace_task *t)
