@@ -533,9 +533,9 @@ void get_argspec_string(struct uftrace_task_reader *task,
 	ASSERT(arg_list && !list_empty(arg_list));
 
 	if (needs_paren)
-		print_args(&args, &len, "%s(%s", color_bold, color_reset);
+		print_args(&args, &len, "(");
 	else if (needs_assignment)
-		print_args(&args, &len, "%s = %s", color_bold, color_reset);
+		print_args(&args, &len, " = ");
 
 	list_for_each_entry(spec, arg_list, list) {
 		char fmtstr[16];
@@ -549,7 +549,7 @@ void get_argspec_string(struct uftrace_task_reader *task,
 			continue;
 
 		if (i > 0)
-			print_args(&args, &len, "%s, %s", color_bold, color_reset);
+			print_args(&args, &len, ", ");
 
 		memset(val.v, 0, sizeof(val));
 		fmt = ARG_SPEC_CHARS[spec->fmt];
@@ -703,7 +703,10 @@ void get_argspec_string(struct uftrace_task_reader *task,
 
 			if (sym) {
 				print_args(&args, &len, "%s", color_symbol);
-				print_args(&args, &len, "&%s", sym->name);
+				if (format_mode == FORMAT_HTML)
+					print_args(&args, &len, "&amp%s", sym->name);
+				else
+					print_args(&args, &len, "&%s", sym->name);
 				print_args(&args, &len, "%s", color_reset);
 			}
 			else if (val.p)
@@ -783,7 +786,7 @@ next:
 	}
 
 	if (needs_paren) {
-		print_args(&args, &len, "%s)%s", color_bold, color_reset);
+		print_args(&args, &len, ")");
 	} else {
 		if (needs_semi_colon)
 			args[n++] = ';';
@@ -1218,6 +1221,9 @@ int command_replay(int argc, char *argv[], struct opts *opts)
 	setup_field(&output_fields, opts, &setup_default_field,
 		    field_table, ARRAY_SIZE(field_table));
 
+	if (format_mode == FORMAT_HTML)
+		pr_out(HTML_HEADER);
+
 	if (!opts->flat && peek_rstack(&handle, &task) == 0)
 		print_header(&output_fields, "#", "FUNCTION", 1, false);
 	if (!list_empty(&output_fields)) {
@@ -1254,6 +1260,9 @@ int command_replay(int argc, char *argv[], struct opts *opts)
 	}
 
 	print_remaining_stack(opts, &handle);
+
+	if (format_mode == FORMAT_HTML)
+		pr_out(HTML_FOOTER);
 
 	close_data_file(opts, &handle);
 
