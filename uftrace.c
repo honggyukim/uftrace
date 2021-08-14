@@ -47,6 +47,8 @@ static bool dbg_domain_set = false;
 
 static bool parsing_default_opts = false;
 
+extern bool html_mode;
+
 struct opts opts = {
 	.mode		= UFTRACE_MODE_INVALID,
 	.dirname	= UFTRACE_DIR_NAME,
@@ -118,6 +120,7 @@ enum options {
 	OPT_no_randomize_addr,
 	OPT_no_event,
 	OPT_no_sched,
+	OPT_html,
 	OPT_signal,
 	OPT_srcline,
 	OPT_usage,
@@ -186,6 +189,7 @@ __used static const char uftrace_help[] =
 "      --no-comment           Don't show comments of returned functions\n"
 "      --no-event             Disable (default) events\n"
 "      --no-sched             Disable schedule events\n"
+"      --html                 Disable the output in html format\n"
 "      --no-libcall           Don't trace library function calls\n"
 "      --no-merge             Don't merge leaf functions\n"
 "      --no-pager             Do not use pager\n"
@@ -301,6 +305,7 @@ static const struct option uftrace_options[] = {
 	REQ_ARG(Event, 'E'),
 	NO_ARG(no-event, OPT_no_event),
 	NO_ARG(no-sched, OPT_no_sched),
+	NO_ARG(html, OPT_html),
 	NO_ARG(list-event, OPT_list_event),
 	REQ_ARG(run-cmd, OPT_run_cmd),
 	REQ_ARG(opt-file, OPT_opt_file),
@@ -955,6 +960,11 @@ static int parse_option(int key, char *arg)
 
 	case OPT_no_sched:
 		opts.no_sched = true;
+		break;
+
+	case OPT_html:
+		opts.html = true;
+		html_mode = true;
 		break;
 
 	case OPT_signal:

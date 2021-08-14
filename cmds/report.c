@@ -575,12 +575,18 @@ int command_report(int argc, char *argv[])
 	if (opts.diff_policy)
 		apply_diff_policy(opts.diff_policy);
 
+	if (opts.html)
+		pr_out(HTML_HEADER);
+
 	if (opts.show_task)
 		report_task(&handle);
 	else if (opts.diff)
 		report_diff(&handle);
 	else
 		report_functions(&handle);
+
+	if (opts.html)
+		pr_out(HTML_FOOTER);
 
 	close_data_file(&handle);
 

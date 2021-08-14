@@ -1001,6 +1001,9 @@ int command_graph(int argc, char *argv[])
 
 	fstack_setup_filters(&handle);
 
+	if (opts.html)
+		pr_out(HTML_HEADER);
+
 	if (opts.show_task) {
 		graph_build_task(&handle);
 		graph_print_task(&handle);
@@ -1036,6 +1039,9 @@ int command_graph(int argc, char *argv[])
 	graph_remove_task();
 
 out:
+	if (opts.html)
+		pr_out(HTML_FOOTER);
+
 	close_data_file(&handle);
 
 	return 0;

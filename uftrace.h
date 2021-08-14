@@ -270,6 +270,7 @@ struct opts {
 	bool event_skip_out;
 	bool no_event;
 	bool no_sched;
+	bool html;
 	bool nest_libcall;
 	bool record;
 	bool auto_args;
@@ -598,5 +599,16 @@ struct uftrace_event {
 	char			*provider;
 	char			*event;
 };
+
+#define HTML_HEADER \
+	"<html>\n"\
+	"<head></head>\n"\
+	"<body style='background-color:black;color:white;'>\n"\
+	"<pre>\n"
+
+#define HTML_FOOTER \
+	"</pre>\n"\
+	"</body>\n"\
+	"</html>\n"
 
 #endif /* UFTRACE_H */

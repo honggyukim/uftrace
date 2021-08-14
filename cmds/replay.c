@@ -531,10 +531,18 @@ void get_argspec_string(struct uftrace_task_reader *task,
 
 	ASSERT(arg_list && !list_empty(arg_list));
 
-	if (needs_paren)
-		print_args(&args, &len, "%s(%s", color_bold, color_reset);
-	else if (needs_assignment)
-		print_args(&args, &len, "%s = %s", color_bold, color_reset);
+	if (opts.html) {
+		if (needs_paren)
+			print_args(&args, &len, "(");
+		else if (needs_assignment)
+			print_args(&args, &len, " = ");
+	}
+	else {
+		if (needs_paren)
+			print_args(&args, &len, "%s(%s", color_bold, color_reset);
+		else if (needs_assignment)
+			print_args(&args, &len, "%s = %s", color_bold, color_reset);
+	}
 
 	list_for_each_entry(spec, arg_list, list) {
 		char fmtstr[16];
@@ -547,8 +555,12 @@ void get_argspec_string(struct uftrace_task_reader *task,
 		if (is_retval != (spec->idx == RETVAL_IDX))
 			continue;
 
-		if (i > 0)
-			print_args(&args, &len, "%s, %s", color_bold, color_reset);
+		if (i > 0) {
+			if (opts.html)
+				print_args(&args, &len, ", ");
+			else
+				print_args(&args, &len, "%s, %s", color_bold, color_reset);
+		}
 
 		memset(val.v, 0, sizeof(val));
 		fmt = ARG_SPEC_CHARS[spec->fmt];
@@ -702,7 +714,10 @@ void get_argspec_string(struct uftrace_task_reader *task,
 
 			if (sym) {
 				print_args(&args, &len, "%s", color_symbol);
-				print_args(&args, &len, "&%s", sym->name);
+				if (opts.html)
+					print_args(&args, &len, "&amp%s", sym->name);
+				else
+					print_args(&args, &len, "&%s", sym->name);
 				print_args(&args, &len, "%s", color_reset);
 			}
 			else if (val.p)
@@ -782,7 +797,10 @@ next:
 	}
 
 	if (needs_paren) {
-		print_args(&args, &len, "%s)%s", color_bold, color_reset);
+		if (opts.html)
+			print_args(&args, &len, ")");
+		else
+			print_args(&args, &len, "%s)%s", color_bold, color_reset);
 	} else {
 		if (needs_semi_colon)
 			args[n++] = ';';
@@ -1215,6 +1233,9 @@ int command_replay(int argc, char *argv[])
 	setup_field(&output_fields, &setup_default_field, field_table,
 		    ARRAY_SIZE(field_table));
 
+	if (opts.html)
+		pr_out(HTML_HEADER);
+
 	if (!opts.flat && peek_rstack(&handle, &task) == 0)
 		print_header(&output_fields, "#", "FUNCTION", 1, false);
 	if (!list_empty(&output_fields)) {
@@ -1251,6 +1272,9 @@ int command_replay(int argc, char *argv[])
 	}
 
 	print_remaining_stack(&handle);
+
+	if (opts.html)
+		pr_out(HTML_FOOTER);
 
 	close_data_file(&handle);
 
