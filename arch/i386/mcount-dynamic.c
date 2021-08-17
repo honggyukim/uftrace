@@ -12,6 +12,8 @@
 
 #define PAGE_SIZE  4096
 
+#define MCOUNTLOC_SECT  "__mcount_loc"
+
 /* target instrumentation function it needs to call */
 extern void __fentry__(void);
 
@@ -30,7 +32,6 @@ struct arch_dynamic_info {
 	enum mcount_i386_dynamic_type	type;
 	struct xray_instr_map		*xrmap;
 	unsigned long			*mcount_loc;
-	unsigned			xrmap_count;
 	unsigned			nr_mcount_loc;
 };
 
@@ -78,14 +79,51 @@ void mcount_cleanup_trampoline(struct mcount_dynamic_info *mdi)
 		pr_err("cannot restore trampoline due to protection");
 }
 
+static void read_mcount_loc(struct arch_dynamic_info *adi,
+			    struct uftrace_elf_data *elf,
+			    struct uftrace_elf_iter *iter,
+			    unsigned long offset)
+{
+	typeof(iter->shdr) *shdr = &iter->shdr;
+
+	adi->nr_mcount_loc = shdr->sh_size / sizeof(long);
+	adi->mcount_loc = xmalloc(shdr->sh_size);
+
+	elf_get_secdata(elf, iter);
+	elf_read_secdata(elf, iter, 0, adi->mcount_loc, shdr->sh_size);
+
+	/* symbol has relative address, fix it to match each other */
+	if (elf->ehdr.e_type == ET_EXEC) {
+		unsigned i;
+
+		for (i = 0; i < adi->nr_mcount_loc; i++) {
+			adi->mcount_loc[i] -= offset;
+		}
+	}
+}
+
 void mcount_arch_find_module(struct mcount_dynamic_info *mdi,
 			     struct symtab *symtab)
 {
+	struct uftrace_elf_data elf;
+	struct uftrace_elf_iter iter;
 	struct arch_dynamic_info *adi;
 	unsigned char fentry_nop_patt[] = { 0x0f, 0x1f, 0x44, 0x00, 0x00 };
 	unsigned i = 0;
 
 	adi = xzalloc(sizeof(*adi));  /* DYNAMIC_NONE */
+
+	if (elf_init(mdi->map->libname, &elf) < 0)
+		goto out;
+
+	elf_for_each_shdr(&elf, &iter) {
+		char *shstr = elf_get_name(&elf, &iter, iter.shdr.sh_name);
+
+		if (!strcmp(shstr, MCOUNTLOC_SECT)) {
+			read_mcount_loc(adi, &elf, &iter, mdi->base_addr);
+			/* still needs to check pg or fentry */
+		}
+	}
 
 	/* check first few functions have fentry signature */
 	for (i = 0; i < symtab->nr_sym; i++) {
@@ -122,6 +160,7 @@ out:
 	       adi->type, adi_type_names[adi->type]);
 
 	mdi->arch = adi;
+	elf_finish(&elf);
 }
 
 static unsigned long get_target_addr(struct mcount_dynamic_info *mdi, unsigned long addr)
