@@ -164,6 +164,10 @@ SORT_KEY(self_avg, self.avg);
 SORT_KEY(self_min, self.min);
 SORT_KEY(self_max, self.max);
 SORT_KEY(call, call);
+SORT_KEY(parent, parent);
+SORT_KEY(child, child);
+SORT_KEY(depth_min, depth.min);
+SORT_KEY(depth_max, depth.max);
 
 static int cmp_func(struct uftrace_report_node *a, struct uftrace_report_node *b)
 {
@@ -178,7 +182,8 @@ static struct sort_key sort_func = {
 
 static struct sort_key *all_sort_keys[] = {
 	&sort_total,	&sort_total_avg, &sort_total_min, &sort_total_max, &sort_self,
-	&sort_self_avg, &sort_self_min,	 &sort_self_max,  &sort_call,	   &sort_func,
+	&sort_self_avg, &sort_self_min,	 &sort_self_max,  &sort_call,	   &sort_parent,
+	&sort_child,	&sort_depth_min, &sort_depth_max, &sort_func,
 };
 
 /* list of used sort keys */
@@ -393,6 +398,10 @@ DIFF_KEY(self_avg, self.avg);
 DIFF_KEY(self_min, self.min);
 DIFF_KEY(self_max, self.max);
 DIFF_KEY(call, call);
+DIFF_KEY(parent, parent);
+DIFF_KEY(child, child);
+DIFF_KEY(depth_min, depth.min);
+DIFF_KEY(depth_max, depth.max);
 
 static int cmp_diff_func(struct uftrace_report_node *a, struct uftrace_report_node *b, int column)
 {
@@ -406,9 +415,10 @@ static struct diff_key sort_diff_func = {
 };
 
 static struct diff_key *all_diff_keys[] = {
-	&sort_diff_total, &sort_diff_total_avg, &sort_diff_total_min, &sort_diff_total_max,
-	&sort_diff_self,  &sort_diff_self_avg,	&sort_diff_self_min,  &sort_diff_self_max,
-	&sort_diff_call,  &sort_diff_func,
+	&sort_diff_total,     &sort_diff_total_avg, &sort_diff_total_min, &sort_diff_total_max,
+	&sort_diff_self,      &sort_diff_self_avg,  &sort_diff_self_min,  &sort_diff_self_max,
+	&sort_diff_call,      &sort_diff_parent,    &sort_diff_child,	  &sort_diff_depth_min,
+	&sort_diff_depth_max, &sort_diff_func,
 };
 
 /* list of used sort keys for diff */
@@ -754,7 +764,7 @@ void report_sort_tasks(struct uftrace_data *handle, struct rb_root *name_root,
 	}                                                                                          \
 	FIELD_STRUCT(_id, _name, _func, _header, 10)
 
-#define FIELD_CALL(_id, _name, _field, _func, _header)                                             \
+#define FIELD_OTHER(_id, _name, _field, _func, _header)                                            \
 	static void print_##_func(struct field_data *fd)                                           \
 	{                                                                                          \
 		struct uftrace_report_node *node = fd->arg;                                        \
@@ -777,7 +787,7 @@ void report_sort_tasks(struct uftrace_data *handle, struct rb_root *name_root,
 	}                                                                                          \
 	FIELD_STRUCT(_id, _name, _func##_diff, _header, 11)
 
-#define FIELD_CALL_DIFF(_id, _name, _field, _func, _header)                                        \
+#define FIELD_OTHER_DIFF(_id, _name, _field, _func, _header)                                       \
 	static void print_##_func##_diff(struct field_data *fd)                                    \
 	{                                                                                          \
 		struct uftrace_report_node *node = fd->arg;                                        \
@@ -800,7 +810,7 @@ void report_sort_tasks(struct uftrace_data *handle, struct rb_root *name_root,
 	}                                                                                          \
 	FIELD_STRUCT(_id, _name, _func##_diff_full, _header, 35)
 
-#define FIELD_CALL_DIFF_FULL(_id, _name, _field, _func, _header)                                   \
+#define FIELD_OTHER_DIFF_FULL(_id, _name, _field, _func, _header)                                  \
 	static void print_##_func(struct field_data *fd)                                           \
 	{                                                                                          \
 		struct uftrace_report_node *node = fd->arg;                                        \
@@ -850,7 +860,11 @@ FIELD_TIME(REPORT_F_SELF_TIME, self, self.sum, self, "Self time");
 FIELD_TIME(REPORT_F_SELF_TIME_AVG, self-avg, self.avg, self_avg, "Self avg");
 FIELD_TIME(REPORT_F_SELF_TIME_MIN, self-min, self.min, self_min, "Self min");
 FIELD_TIME(REPORT_F_SELF_TIME_MAX, self-max, self.max, self_max, "Self max");
-FIELD_CALL(REPORT_F_CALL, call, call, call, "Calls");
+FIELD_OTHER(REPORT_F_CALL, call, call, call, "Calls");
+FIELD_OTHER(REPORT_F_NR_PARENT, parent, parent, parent, "Parent");
+FIELD_OTHER(REPORT_F_NR_CHILD, child, child, child, "Child");
+FIELD_OTHER(REPORT_F_DEPTH_MIN, depth-min, depth.min, depth_min, "Depth min");
+FIELD_OTHER(REPORT_F_DEPTH_MAX, depth-max, depth.max, depth_max, "Depth max");
 
 FIELD_TIME_DIFF(REPORT_F_TOTAL_TIME, total, total.sum, total, "Total time");
 FIELD_TIME_DIFF(REPORT_F_TOTAL_TIME_AVG, total-avg, total.avg, total_avg, "Total avg");
@@ -860,7 +874,11 @@ FIELD_TIME_DIFF(REPORT_F_SELF_TIME, self, self.sum, self, "Self time");
 FIELD_TIME_DIFF(REPORT_F_SELF_TIME_AVG, self-avg, self.avg, self_avg, "Self avg");
 FIELD_TIME_DIFF(REPORT_F_SELF_TIME_MIN, self-min, self.min, self_min, "Self min");
 FIELD_TIME_DIFF(REPORT_F_SELF_TIME_MAX, self-max, self.max, self_max, "Self max");
-FIELD_CALL_DIFF(REPORT_F_CALL, call, call, call, "Calls");
+FIELD_OTHER_DIFF(REPORT_F_CALL, call, call, call, "Calls");
+FIELD_OTHER_DIFF(REPORT_F_NR_PARENT, parent, parent, parent, "Parent");
+FIELD_OTHER_DIFF(REPORT_F_NR_CHILD, child, child, child, "Child");
+FIELD_OTHER_DIFF(REPORT_F_DEPTH_MIN, depth-min, depth.min, depth_min, "Depth min");
+FIELD_OTHER_DIFF(REPORT_F_DEPTH_MAX, depth-max, depth.max, depth_max, "Depth max");
 
 FIELD_TIME_DIFF_FULL(REPORT_F_TOTAL_TIME, total, total.sum, total, "Total time (diff)");
 FIELD_TIME_DIFF_FULL(REPORT_F_TOTAL_TIME_AVG, total-avg, total.avg, total_avg, "Total avg (diff)");
@@ -870,7 +888,11 @@ FIELD_TIME_DIFF_FULL(REPORT_F_SELF_TIME, self, self.sum, self, "Self time (diff)
 FIELD_TIME_DIFF_FULL(REPORT_F_SELF_TIME_AVG, self-avg, self.avg, self_avg, "Self avg (diff)");
 FIELD_TIME_DIFF_FULL(REPORT_F_SELF_TIME_MIN, self-min, self.min, self_min, "Self min (diff)");
 FIELD_TIME_DIFF_FULL(REPORT_F_SELF_TIME_MAX, self-max, self.max, self_max, "Self min (diff)");
-FIELD_CALL_DIFF_FULL(REPORT_F_CALL, call, call, call_diff_full, "Calls (diff)");
+FIELD_OTHER_DIFF_FULL(REPORT_F_CALL, call, call, call_diff_full, "Calls (diff)");
+FIELD_OTHER_DIFF_FULL(REPORT_F_NR_PARENT, parent, parent, parent_diff_full, "Parent (diff)");
+FIELD_OTHER_DIFF_FULL(REPORT_F_NR_CHILD, child, child, child_diff_full, "Child (diff)");
+FIELD_OTHER_DIFF_FULL(REPORT_F_DEPTH_MIN, depth-min, depth.min, depth_min_diff_full, "Depth min (diff)");
+FIELD_OTHER_DIFF_FULL(REPORT_F_DEPTH_MAX, depth-max, depth.max, depth_max_diff_full, "Depth max (diff)");
 
 FIELD_TIME_DIFF_FULL_PCT(REPORT_F_TOTAL_TIME, total, total.sum, total, "Total time (diff)");
 FIELD_TIME_DIFF_FULL_PCT(REPORT_F_TOTAL_TIME_AVG, total-avg, total.avg, total_avg, "Total avg (diff)");
@@ -880,25 +902,31 @@ FIELD_TIME_DIFF_FULL_PCT(REPORT_F_SELF_TIME, self, self.sum, self, "Self time (d
 FIELD_TIME_DIFF_FULL_PCT(REPORT_F_SELF_TIME_AVG, self-avg, self.avg, self_avg, "Self avg (diff)");
 FIELD_TIME_DIFF_FULL_PCT(REPORT_F_SELF_TIME_MIN, self-min, self.min, self_min, "Self min (diff)");
 FIELD_TIME_DIFF_FULL_PCT(REPORT_F_SELF_TIME_MAX, self-max, self.max, self_max, "Self min (diff)");
-FIELD_CALL_DIFF_FULL(REPORT_F_CALL, call, call, call_diff_full_percent, "Calls (diff)");
+FIELD_OTHER_DIFF_FULL(REPORT_F_CALL, call, call, call_diff_full_percent, "Calls (diff)");
+FIELD_OTHER_DIFF_FULL(REPORT_F_NR_PARENT, parent, parent, parent_diff_full_percent, "Parent (diff)");
+FIELD_OTHER_DIFF_FULL(REPORT_F_NR_CHILD, child, child, child_diff_full_percent, "Child (diff)");
+FIELD_OTHER_DIFF_FULL(REPORT_F_DEPTH_MIN, depth-min, depth.min, depth_min_diff_full_percent, "Depth min (diff)");
+FIELD_OTHER_DIFF_FULL(REPORT_F_DEPTH_MAX, depth-max, depth.max, depth_max_diff_full_percent, "Depth max (diff)");
 
 FIELD_TIME(REPORT_F_TASK_TOTAL_TIME, total, total.sum, task_total, "Total time");
 FIELD_TIME(REPORT_F_TASK_SELF_TIME, self, self.sum, task_self, "Self time");
 FIELD_TID(REPORT_F_TASK_TID, tid, task_tid, "TID");
-FIELD_CALL(REPORT_F_TASK_NR_FUNC, func, call, task_nr_func, "Num funcs");
+FIELD_OTHER(REPORT_F_TASK_NR_FUNC, func, call, task_nr_func, "Num funcs");
 /* clang-format on */
 
 /* index of this table should be matched to display_field_id */
 static struct display_field *field_table[] = {
 	&field_total,	 &field_total_avg, &field_total_min, &field_total_max, &field_self,
-	&field_self_avg, &field_self_min,  &field_self_max,  &field_call,
+	&field_self_avg, &field_self_min,  &field_self_max,  &field_call,      &field_parent,
+	&field_child,	 &field_depth_min, &field_depth_max,
 };
 
 /* index of this table should be matched to display_field_id */
 static struct display_field *field_diff_table[] = {
-	&field_total_diff,     &field_total_avg_diff, &field_total_min_diff,
-	&field_total_max_diff, &field_self_diff,      &field_self_avg_diff,
-	&field_self_min_diff,  &field_self_max_diff,  &field_call_diff,
+	&field_total_diff,     &field_total_avg_diff, &field_total_min_diff, &field_total_max_diff,
+	&field_self_diff,      &field_self_avg_diff,  &field_self_min_diff,  &field_self_max_diff,
+	&field_call_diff,      &field_parent_diff,    &field_child_diff,     &field_depth_min_diff,
+	&field_depth_max_diff,
 };
 
 /* index of this table should be matched to display_field_id */
@@ -906,6 +934,8 @@ static struct display_field *field_diff_full_table[] = {
 	&field_total_diff_full,	    &field_total_avg_diff_full, &field_total_min_diff_full,
 	&field_total_max_diff_full, &field_self_diff_full,	&field_self_avg_diff_full,
 	&field_self_min_diff_full,  &field_self_max_diff_full,	&field_call_diff_full,
+	&field_parent_diff_full,    &field_child_diff_full,	&field_depth_min_diff_full,
+	&field_depth_max_diff_full,
 };
 
 /* index of this table should be matched to display_field_id */
@@ -914,7 +944,9 @@ static struct display_field *field_diff_full_percent_table[] = {
 	&field_total_min_diff_full_percent, &field_total_max_diff_full_percent,
 	&field_self_diff_full_percent,	    &field_self_avg_diff_full_percent,
 	&field_self_min_diff_full_percent,  &field_self_max_diff_full_percent,
-	&field_call_diff_full_percent,
+	&field_call_diff_full_percent,	    &field_parent_diff_full_percent,
+	&field_child_diff_full_percent,	    &field_depth_min_diff_full_percent,
+	&field_depth_max_diff_full_percent,
 };
 
 /* index of this table should be matched to display_field_id */
