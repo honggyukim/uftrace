@@ -190,6 +190,7 @@ void mcount_arch_find_module(struct mcount_dynamic_info *mdi,
 	struct arch_dynamic_info *adi;
 	unsigned char fentry_nop_patt1[] = { 0x67, 0x0f, 0x1f, 0x04, 0x00 };
 	unsigned char fentry_nop_patt2[] = { 0x0f, 0x1f, 0x44, 0x00, 0x00 };
+	unsigned char fpatchable_nop_patt[] = { 0x90, 0x90, 0x90, 0x90, 0x90 };
 	unsigned i = 0;
 
 	adi = xzalloc(sizeof(*adi));  /* DYNAMIC_NONE */
@@ -226,7 +227,8 @@ void mcount_arch_find_module(struct mcount_dynamic_info *mdi,
 
 		/* only support calls to __fentry__ at the beginning */
 		if (!memcmp(code_addr, fentry_nop_patt1, CALL_INSN_SIZE) ||
-		    !memcmp(code_addr, fentry_nop_patt2, CALL_INSN_SIZE)) {
+		    !memcmp(code_addr, fentry_nop_patt2, CALL_INSN_SIZE) ||
+		    !memcmp(code_addr, fpatchable_nop_patt, CALL_INSN_SIZE)) {
 			adi->type = DYNAMIC_FENTRY_NOP;
 			goto out;
 		}
@@ -260,12 +262,14 @@ static int patch_fentry_func(struct mcount_dynamic_info *mdi, struct sym *sym)
 {
 	unsigned char nop1[] = { 0x67, 0x0f, 0x1f, 0x04, 0x00 };
 	unsigned char nop2[] = { 0x0f, 0x1f, 0x44, 0x00, 0x00 };
+	unsigned char nop3[] = { 0x90, 0x90, 0x90, 0x90, 0x90 };
 	unsigned char *insn = (void *)sym->addr + mdi->map->start;
 	unsigned int target_addr;
 
 	/* only support calls to __fentry__ at the beginning */
 	if (memcmp(insn, nop1, sizeof(nop1)) &&  /* old pattern */
-	    memcmp(insn, nop2, sizeof(nop2))) {  /* new pattern */
+	    memcmp(insn, nop2, sizeof(nop2)) &&  /* new pattern */
+	    memcmp(insn, nop3, sizeof(nop3))) {  /* new pattern */
 		pr_dbg("skip non-applicable functions: %s\n", sym->name);
 		return INSTRUMENT_FAILED;
 	}
@@ -482,7 +486,7 @@ static int patch_normal_func(struct mcount_dynamic_info *mdi, struct sym *sym,
 		return state;
 	}
 
-	pr_dbg2("patch normal func: %s (patch size: %d)\n",
+	pr_dbg2("force patch normal func: %s (patch size: %d)\n",
 		sym->name, info.orig_size);
 
 	/*
