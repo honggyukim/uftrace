@@ -19,6 +19,22 @@
 /* target instrumentation function it needs to call */
 extern void __dentry__(void);
 
+#if 1
+enum mcount_aarch64_dynamic_type {
+	DYNAMIC_NONE,
+	DYNAMIC_PG,
+	DYNAMIC_FPATCHABLE,
+};
+
+static const char *adi_type_names[] = {
+	"none", "pg", "fpatchable",
+};
+
+struct arch_dynamic_info {
+	enum mcount_aarch64_dynamic_type	type;
+};
+#endif
+
 static void save_orig_code(struct mcount_disasm_info *info)
 {
 	uint32_t jmp_insn[6] = {
@@ -79,15 +95,247 @@ int mcount_setup_trampoline(struct mcount_dynamic_info *mdi)
 	return 0;
 }
 
+#if 1
+void mcount_arch_find_module(struct mcount_dynamic_info *mdi,
+			     struct symtab *symtab)
+{
+#if 1
+	struct uftrace_elf_data elf;
+	struct uftrace_elf_iter iter;
+	struct arch_dynamic_info *adi;
+	unsigned int fpatchable_nop_patt[] = { 0xd503201f, 0xd503201f };
+	unsigned i = 0;
+
+	adi = xzalloc(sizeof(*adi));  /* DYNAMIC_NONE */
+
+	if (elf_init(mdi->map->libname, &elf) < 0)
+		goto out;
+
+	/* check first few functions have fentry signature */
+	for (i = 0; i < symtab->nr_sym; i++) {
+		struct sym *sym = &symtab->sym[i];
+		void *code_addr = (void *)sym->addr + mdi->map->start;
+
+		if (sym->type != ST_LOCAL_FUNC && sym->type != ST_GLOBAL_FUNC)
+			continue;
+
+		/* dont' check special functions */
+		if (sym->name[0] == '_')
+			continue;
+
+		/* only support calls to __fentry__ at the beginning */
+		if (!memcmp(code_addr, fpatchable_nop_patt, CODE_SIZE)) {
+			adi->type = DYNAMIC_FPATCHABLE;
+			goto out;
+		}
+	}
+#else
+	struct uftrace_elf_data elf;
+	struct uftrace_elf_iter iter;
+	struct arch_dynamic_info *adi;
+	unsigned char fentry_nop_patt1[] = { 0x67, 0x0f, 0x1f, 0x04, 0x00 };
+	unsigned char fentry_nop_patt2[] = { 0x0f, 0x1f, 0x44, 0x00, 0x00 };
+	unsigned char fpatchable_nop_patt[] = { 0x90, 0x90, 0x90, 0x90, 0x90 };
+	unsigned i = 0;
+
+	adi = xzalloc(sizeof(*adi));  /* DYNAMIC_NONE */
+
+	if (elf_init(mdi->map->libname, &elf) < 0)
+		goto out;
+
+	elf_for_each_shdr(&elf, &iter) {
+		char *shstr = elf_get_name(&elf, &iter, iter.shdr.sh_name);
+
+		if (!strcmp(shstr, XRAY_SECT)) {
+			adi->type = DYNAMIC_XRAY;
+			read_xray_map(adi, &elf, &iter, mdi->base_addr);
+			goto out;
+		}
+
+		if (!strcmp(shstr, MCOUNTLOC_SECT)) {
+			read_mcount_loc(adi, &elf, &iter, mdi->base_addr);
+			/* still needs to check pg or fentry */
+		}
+	}
+
+	/* check first few functions have fentry signature */
+	for (i = 0; i < symtab->nr_sym; i++) {
+		struct sym *sym = &symtab->sym[i];
+		void *code_addr = (void *)sym->addr + mdi->map->start;
+
+		if (sym->type != ST_LOCAL_FUNC && sym->type != ST_GLOBAL_FUNC)
+			continue;
+
+		/* dont' check special functions */
+		if (sym->name[0] == '_')
+			continue;
+
+		/* only support calls to __fentry__ at the beginning */
+		if (!memcmp(code_addr, fentry_nop_patt1, CALL_INSN_SIZE) ||
+		    !memcmp(code_addr, fentry_nop_patt2, CALL_INSN_SIZE) ||
+		    !memcmp(code_addr, fpatchable_nop_patt, CALL_INSN_SIZE)) {
+			adi->type = DYNAMIC_FPATCHABLE;
+			goto out;
+		}
+	}
+#endif
+	switch (check_trace_functions(mdi->map->libname)) {
+	case TRACE_MCOUNT:
+		adi->type = DYNAMIC_PG;
+		break;
+
+	case TRACE_FENTRY:
+		adi->type = DYNAMIC_FPATCHABLE;
+		break;
+
+	default:
+		break;
+	}
+
+out:
+	pr_dbg("dynamic patch type: %s: %d (%s)\n", basename(mdi->map->libname),
+	       adi->type, adi_type_names[adi->type]);
+
+	mdi->arch = adi;
+	elf_finish(&elf);
+}
+#endif
+
 static unsigned long get_target_addr(struct mcount_dynamic_info *mdi,
 				     unsigned long addr)
 {
 	return (mdi->trampoline - addr - 4) >> 2;
 }
 
+#if 0
+static int patch_fentry_func(struct mcount_dynamic_info *mdi, struct sym *sym)
+{
+	unsigned char nop1[] = { 0x67, 0x0f, 0x1f, 0x04, 0x00 };
+	unsigned char nop2[] = { 0x0f, 0x1f, 0x44, 0x00, 0x00 };
+	unsigned char nop3[] = { 0x90, 0x90, 0x90, 0x90, 0x90 };
+	unsigned char *insn = (void *)sym->addr + mdi->map->start;
+	unsigned int target_addr;
+
+	/* only support calls to __fentry__ at the beginning */
+	if (memcmp(insn, nop1, sizeof(nop1)) &&  /* old pattern */
+	    memcmp(insn, nop2, sizeof(nop2)) &&  /* new pattern */
+	    memcmp(insn, nop3, sizeof(nop3))) {  /* new pattern */
+		pr_dbg("skip non-applicable functions: %s\n", sym->name);
+		return INSTRUMENT_FAILED;
+	}
+
+	/* get the jump offset to the trampoline */
+	target_addr = get_target_addr(mdi, (unsigned long)insn);
+	if (target_addr == 0)
+		return INSTRUMENT_SKIPPED;
+
+	/* make a "call" insn with 4-byte offset */
+	insn[0] = 0xe8;
+	/* hopefully we're not patching 'memcpy' itself */
+	memcpy(&insn[1], &target_addr, sizeof(target_addr));
+
+	pr_dbg3("update function '%s' dynamically to call __fentry__\n",
+		sym->name);
+
+	return INSTRUMENT_SUCCESS;
+}
+#else
+static int patch_fpatchable_func(struct mcount_dynamic_info *mdi, struct sym *sym)
+{
+	unsigned int fpatchable_nop_patt[] = { 0xd503201f, 0xd503201f };
+	unsigned char *insn = (void *)sym->addr + mdi->map->start;
+	unsigned int target_addr;
+
+	/* only support calls to 2 nops at the beginning */
+	if (memcmp(insn, fpatchable_nop_patt, sizeof(fpatchable_nop_patt))) {
+		pr_dbg("skip non-applicable functions: %s\n", sym->name);
+		return INSTRUMENT_FAILED;
+	}
+
+	/* get the jump offset to the trampoline */
+	target_addr = get_target_addr(mdi, (unsigned long)insn);
+	if (target_addr == 0)
+		return INSTRUMENT_SKIPPED;
+#if 0
+	/* make a "call" insn with 4-byte offset */
+	insn[0] = 0xe8;
+	/* hopefully we're not patching 'memcpy' itself */
+	memcpy(&insn[1], &target_addr, sizeof(target_addr));
+#endif
+
+	pr_dbg3("update function '%s' dynamically to call __fentry__\n",
+		sym->name);
+
+	return INSTRUMENT_SUCCESS;
+}
+#endif
+
+#if 1
+static int patch_normal_func(struct mcount_dynamic_info *mdi, struct sym *sym,
+			     struct mcount_disasm_engine *disasm)
+{
+	uint32_t push = 0xa9bf7bfd;  /* STP  x29, x30, [sp, #-0x10]! */
+	uint32_t call;
+	struct mcount_disasm_info info = {
+		.sym = sym,
+		.addr = sym->addr + mdi->map->start,
+	};
+	void *insn = (void *)info.addr;
+
+	if (disasm_check_insns(disasm, mdi, &info) < 0)
+		return INSTRUMENT_FAILED;
+
+	save_orig_code(&info);
+
+	call = get_target_addr(mdi, info.addr);
+
+	if ((call & 0xfc000000) != 0)
+		return INSTRUMENT_FAILED;
+
+	pr_dbg2("force patch normal func: %s (patch size: %d)\n",
+		sym->name, info.orig_size);
+
+	/* make a "BL" insn with 26-bit offset */
+	call |= 0x94000000;
+
+	/* hopefully we're not patching 'memcpy' itself */
+	memcpy(insn, &push, sizeof(push));
+	memcpy(insn + 4, &call, sizeof(call));
+
+	/* flush icache so that cpu can execute the new code */
+	__builtin___clear_cache(insn, insn + CODE_SIZE);
+
+	return INSTRUMENT_SUCCESS;
+}
+#endif
+
 int mcount_patch_func(struct mcount_dynamic_info *mdi, struct sym *sym,
 		      struct mcount_disasm_engine *disasm, unsigned min_size)
 {
+#if 1
+	struct arch_dynamic_info *adi = mdi->arch;
+	int result = INSTRUMENT_SKIPPED;
+
+	if (min_size < CODE_SIZE)
+		min_size = CODE_SIZE;
+
+	if (sym->size <= min_size)
+		return result;
+
+	switch (adi->type) {
+	case DYNAMIC_FPATCHABLE:
+		result = patch_fpatchable_func(mdi, sym);
+		break;
+
+	case DYNAMIC_NONE:
+		result = patch_normal_func(mdi, sym, disasm);
+		break;
+
+	default:
+		break;
+	}
+	return result;
+#else
 	uint32_t push = 0xa9bf7bfd;  /* STP  x29, x30, [sp, #-0x10]! */
 	uint32_t call;
 	struct mcount_disasm_info info = {
@@ -125,6 +373,7 @@ int mcount_patch_func(struct mcount_dynamic_info *mdi, struct sym *sym,
 	__builtin___clear_cache(insn, insn + CODE_SIZE);
 
 	return INSTRUMENT_SUCCESS;
+#endif
 }
 
 static void revert_normal_func(struct mcount_dynamic_info *mdi, struct sym *sym,
