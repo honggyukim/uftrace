@@ -13,8 +13,8 @@ GLOBAL(__fentry__)
 	/* platform register and/or scratch registers */
 	stp	x8, x9, [sp, #-16]!
 
-	/* also save original child address for mcount_find_code */
-	stp	x29, x30, [sp, #-16]!	/* TODO: remove this */
+	/* also save original child address */
+	stp	x29, x30, [sp, #-16]!
 
 	/* save arguments */
 	stp	x6, x7, [sp, #-16]!
@@ -29,10 +29,6 @@ GLOBAL(__fentry__)
 	add	x2, sp, #16
 	bl	mcount_entry
 
-#	ldr	x0, [sp, #88]
-#	bl	mcount_find_code
-#	str	x0, [sp, #88]
-
 	ldp	d0, d1, [sp], #16
 
 	/* restore arguments */
@@ -41,7 +37,7 @@ GLOBAL(__fentry__)
 	ldp	x4, x5, [sp], #16
 	ldp	x6, x7, [sp], #16
 
-	/* actual return address from mcount_find_code() */
+	/* actual return address */
 	ldp	x16, x17, [sp], #16
 
 	ldp	x8, x9, [sp], #16

@@ -16,6 +16,7 @@
 #define PAGE_LEN(a, l)    (a + l - (unsigned long)PAGE_ADDR(a))
 #define XRAY_SECT  "xray_instr_map"
 #define MCOUNTLOC_SECT  "__mcount_loc"
+#define PATCHABLE_SECT  "__patchable_function_entries"
 
 /* target instrumentation function it needs to call */
 extern void __fentry__(void);
@@ -38,6 +39,7 @@ enum mcount_x86_dynamic_type {
 	DYNAMIC_FENTRY,
 	DYNAMIC_FENTRY_NOP,
 	DYNAMIC_XRAY,
+	DYNAMIC_PATCHABLE,
 };
 
 static const char *adi_type_names[] = {
@@ -47,9 +49,11 @@ static const char *adi_type_names[] = {
 struct arch_dynamic_info {
 	enum mcount_x86_dynamic_type	type;
 	struct xray_instr_map		*xrmap;
-	unsigned long			*mcount_loc;
 	unsigned			xrmap_count;
+	unsigned long			*mcount_loc;
 	unsigned			nr_mcount_loc;
+	unsigned long			*patchable_loc;
+	unsigned			nr_patchable_loc;
 };
 
 int mcount_setup_trampoline(struct mcount_dynamic_info *mdi)
@@ -182,6 +186,30 @@ static void read_mcount_loc(struct arch_dynamic_info *adi,
 	}
 }
 
+static void read_patchable_loc(struct arch_dynamic_info *adi,
+			    struct uftrace_elf_data *elf,
+			    struct uftrace_elf_iter *iter,
+			    unsigned long offset)
+{
+	typeof(iter->shdr) *shdr = &iter->shdr;
+
+	adi->nr_patchable_loc = shdr->sh_size / sizeof(long);
+	adi->patchable_loc = xmalloc(shdr->sh_size);
+
+	elf_get_secdata(elf, iter);
+	elf_read_secdata(elf, iter, 0, adi->patchable_loc, shdr->sh_size);
+
+	/* symbol has relative address, fix it to match each other */
+	if (elf->ehdr.e_type == ET_EXEC) {
+		unsigned i;
+
+		for (i = 0; i < adi->nr_patchable_loc; i++) {
+			adi->patchable_loc[i] -= offset;
+			pr_yellow("adi->patchable_loc[%u] = %#lx\n", i, adi->patchable_loc[i]);
+		}
+	}
+}
+
 void mcount_arch_find_module(struct mcount_dynamic_info *mdi,
 			     struct symtab *symtab)
 {
@@ -204,6 +232,12 @@ void mcount_arch_find_module(struct mcount_dynamic_info *mdi,
 		if (!strcmp(shstr, XRAY_SECT)) {
 			adi->type = DYNAMIC_XRAY;
 			read_xray_map(adi, &elf, &iter, mdi->base_addr);
+			goto out;
+		}
+
+		if (!strcmp(shstr, PATCHABLE_SECT)) {
+			adi->type = DYNAMIC_PATCHABLE;
+			read_patchable_loc(adi, &elf, &iter, mdi->base_addr);
 			goto out;
 		}
 

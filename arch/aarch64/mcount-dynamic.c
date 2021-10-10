@@ -15,6 +15,7 @@
 
 #define PAGE_SIZE  4096
 #define CODE_SIZE  8
+#define PATCHABLE_SECT  "__patchable_function_entries"
 
 /* target instrumentation function it needs to call */
 extern void __dentry__(void);
@@ -24,7 +25,7 @@ extern void __fentry__(void);
 enum mcount_aarch64_dynamic_type {
 	DYNAMIC_NONE,
 	DYNAMIC_PG,
-	DYNAMIC_FPATCHABLE,
+	DYNAMIC_PATCHABLE,
 };
 
 static const char *adi_type_names[] = {
@@ -33,6 +34,8 @@ static const char *adi_type_names[] = {
 
 struct arch_dynamic_info {
 	enum mcount_aarch64_dynamic_type	type;
+	unsigned long				*patchable_loc;
+	unsigned				nr_patchable_loc;
 };
 #endif
 
@@ -58,9 +61,8 @@ static void save_orig_code(struct mcount_disasm_info *info)
 int mcount_setup_trampoline(struct mcount_dynamic_info *mdi)
 {
 	uintptr_t dentry_addr = (uintptr_t)(void *)&__dentry__;
-	unsigned long fentry_addr = (unsigned long)__fentry__;
+	uintptr_t fentry_addr = (uintptr_t)(void *)&__fentry__;
 	struct arch_dynamic_info *adi = mdi->arch;
-
 	/*
 	 * trampoline assumes {x29,x30} was pushed but x29 was not updated.
 	 * make sure stack is 8-byte aligned.
@@ -72,6 +74,11 @@ int mcount_setup_trampoline(struct mcount_dynamic_info *mdi)
 		dentry_addr,
 		dentry_addr >> 32,
 	};
+
+	if (adi->type == DYNAMIC_PATCHABLE) {
+		trampoline[3] = fentry_addr;
+		trampoline[4] = fentry_addr >> 32;
+	}
 
 	/* find unused 16-byte at the end of the code segment */
 	mdi->trampoline  = ALIGN(mdi->text_addr + mdi->text_size, PAGE_SIZE);
@@ -95,16 +102,36 @@ int mcount_setup_trampoline(struct mcount_dynamic_info *mdi)
 		return -1;
 	}
 
-	if (adi->type == DYNAMIC_FPATCHABLE) {
-		trampoline[3] = fentry_addr;
-		trampoline[4] = fentry_addr >> 32;
-	}
-
 	memcpy((void *)mdi->trampoline, trampoline, sizeof(trampoline));
 	return 0;
 }
 
 #if 1
+static void read_patchable_loc(struct arch_dynamic_info *adi,
+			    struct uftrace_elf_data *elf,
+			    struct uftrace_elf_iter *iter,
+			    unsigned long offset)
+{
+	typeof(iter->shdr) *shdr = &iter->shdr;
+
+	adi->nr_patchable_loc = shdr->sh_size / sizeof(long);
+	adi->patchable_loc = xmalloc(shdr->sh_size);
+
+	elf_get_secdata(elf, iter);
+	elf_read_secdata(elf, iter, 0, adi->patchable_loc, shdr->sh_size);
+
+	/* symbol has relative address, fix it to match each other */
+	if (elf->ehdr.e_type == ET_EXEC) {
+		unsigned i;
+
+		for (i = 0; i < adi->nr_patchable_loc; i++) {
+			adi->patchable_loc[i] -= offset;
+			pr_yellow("adi->patchable_loc[%u] = %#lx\n", i, adi->patchable_loc[i]);
+		}
+	}
+}
+#endif
+
 void mcount_arch_find_module(struct mcount_dynamic_info *mdi,
 			     struct symtab *symtab)
 {
@@ -134,6 +161,22 @@ void mcount_arch_find_module(struct mcount_dynamic_info *mdi,
 			/* still needs to check pg or fentry */
 		}
 	}
+#else
+	elf_for_each_shdr(&elf, &iter) {
+		char *shstr = elf_get_name(&elf, &iter, iter.shdr.sh_name);
+#if 0
+		if (!strcmp(shstr, XRAY_SECT)) {
+			adi->type = DYNAMIC_XRAY;
+			read_xray_map(adi, &elf, &iter, mdi->base_addr);
+			goto out;
+		}
+#endif
+		if (!strcmp(shstr, PATCHABLE_SECT)) {
+			adi->type = DYNAMIC_PATCHABLE;
+			read_patchable_loc(adi, &elf, &iter, mdi->base_addr);
+			goto out;
+		}
+	}
 #endif
 	/* check first few functions have fentry signature */
 	for (i = 0; i < symtab->nr_sym; i++) {
@@ -149,7 +192,7 @@ void mcount_arch_find_module(struct mcount_dynamic_info *mdi,
 
 		/* only support calls to __fentry__ at the beginning */
 		if (!memcmp(code_addr, fpatchable_nop_patt, CODE_SIZE)) {
-			adi->type = DYNAMIC_FPATCHABLE;
+			adi->type = DYNAMIC_PATCHABLE;
 			goto out;
 		}
 	}
@@ -158,11 +201,11 @@ void mcount_arch_find_module(struct mcount_dynamic_info *mdi,
 	case TRACE_MCOUNT:
 		adi->type = DYNAMIC_PG;
 		break;
-
+#if 0
 	case TRACE_FENTRY:
-		adi->type = DYNAMIC_FPATCHABLE;
+		adi->type = DYNAMIC_PATCHABLE;
 		break;
-
+#endif
 	default:
 		break;
 	}
@@ -174,7 +217,6 @@ out:
 	mdi->arch = adi;
 	elf_finish(&elf);
 }
-#endif
 
 static unsigned long get_target_addr(struct mcount_dynamic_info *mdi,
 				     unsigned long addr)
@@ -268,7 +310,7 @@ int mcount_patch_func(struct mcount_dynamic_info *mdi, struct sym *sym,
 		return result;
 
 	switch (adi->type) {
-	case DYNAMIC_FPATCHABLE:
+	case DYNAMIC_PATCHABLE:
 		result = patch_fpatchable_func(mdi, sym);
 		break;
 
