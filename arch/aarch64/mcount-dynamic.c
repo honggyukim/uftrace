@@ -18,6 +18,7 @@
 
 /* target instrumentation function it needs to call */
 extern void __dentry__(void);
+extern void __fentry__(void);
 
 #if 1
 enum mcount_aarch64_dynamic_type {
@@ -57,6 +58,9 @@ static void save_orig_code(struct mcount_disasm_info *info)
 int mcount_setup_trampoline(struct mcount_dynamic_info *mdi)
 {
 	uintptr_t dentry_addr = (uintptr_t)(void *)&__dentry__;
+#if 1
+	unsigned long fentry_addr = (unsigned long)__fentry__;
+#endif
 	/*
 	 * trampoline assumes {x29,x30} was pushed but x29 was not updated.
 	 * make sure stack is 8-byte aligned.
@@ -65,8 +69,13 @@ int mcount_setup_trampoline(struct mcount_dynamic_info *mdi)
 		0x910003fd,                     /* MOV  x29, sp */
 		0x58000050,                     /* LDR  ip0, &__dentry__ */
 		0xd61f0200,                     /* BR   ip0 */
+#if 0
 		dentry_addr,
 		dentry_addr >> 32,
+#else
+		fentry_addr,
+		fentry_addr >> 32,
+#endif
 	};
 
 	/* find unused 16-byte at the end of the code segment */
@@ -242,9 +251,10 @@ static int patch_fentry_func(struct mcount_dynamic_info *mdi, struct sym *sym)
 #else
 static int patch_fpatchable_func(struct mcount_dynamic_info *mdi, struct sym *sym)
 {
+	uint32_t push = 0xa9bf7bfd;  /* STP  x29, x30, [sp, #-0x10]! */
+	uint32_t call;
 	unsigned int fpatchable_nop_patt[] = { 0xd503201f, 0xd503201f };
 	unsigned char *insn = (void *)sym->addr + mdi->map->start;
-	unsigned int target_addr;
 
 	/* only support calls to 2 nops at the beginning */
 	if (memcmp(insn, fpatchable_nop_patt, sizeof(fpatchable_nop_patt))) {
@@ -252,19 +262,33 @@ static int patch_fpatchable_func(struct mcount_dynamic_info *mdi, struct sym *sy
 		return INSTRUMENT_FAILED;
 	}
 
-	/* get the jump offset to the trampoline */
-	target_addr = get_target_addr(mdi, (unsigned long)insn);
-	if (target_addr == 0)
-		return INSTRUMENT_SKIPPED;
+	call = get_target_addr(mdi, (unsigned long)insn);
+//	if (call == 0)
+//		return INSTRUMENT_SKIPPED;
 #if 0
 	/* make a "call" insn with 4-byte offset */
 	insn[0] = 0xe8;
 	/* hopefully we're not patching 'memcpy' itself */
 	memcpy(&insn[1], &target_addr, sizeof(target_addr));
+#else
+	pr_dbg("target_addr = %#lx\n", call);
+
+	if ((call & 0xfc000000) != 0)
+		return INSTRUMENT_FAILED;
 #endif
 
 	pr_dbg3("update function '%s' dynamically to call __fentry__\n",
 		sym->name);
+
+	/* make a "BL" insn with 26-bit offset */
+	call |= 0x94000000;
+
+	/* hopefully we're not patching 'memcpy' itself */
+	memcpy(insn, &push, sizeof(push));
+	memcpy(insn + 4, &call, sizeof(call));
+
+	/* flush icache so that cpu can execute the new code */
+	__builtin___clear_cache(insn, insn + CODE_SIZE);
 
 	return INSTRUMENT_SUCCESS;
 }
@@ -288,6 +312,9 @@ static int patch_normal_func(struct mcount_dynamic_info *mdi, struct sym *sym,
 	save_orig_code(&info);
 
 	call = get_target_addr(mdi, info.addr);
+#if 1
+	pr_dbg("target_addr = %#lx\n", call);
+#endif
 
 	if ((call & 0xfc000000) != 0)
 		return INSTRUMENT_FAILED;
