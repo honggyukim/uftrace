@@ -43,7 +43,7 @@ enum mcount_x86_dynamic_type {
 };
 
 static const char *adi_type_names[] = {
-	"none", "pg", "fentry", "fentry-nop", "xray",
+	"none", "pg", "fentry", "fentry-nop", "xray", "fpatchable",
 };
 
 struct arch_dynamic_info {
@@ -107,7 +107,7 @@ int mcount_setup_trampoline(struct mcount_dynamic_info *mdi)
 		memcpy((void *)mdi->trampoline + 16 + sizeof(trampoline),
 		       &xray_exit_addr, sizeof(xray_exit_addr));
 	}
-	else if (adi->type == DYNAMIC_FENTRY_NOP) {
+	else if (adi->type == DYNAMIC_FENTRY_NOP || adi->type == DYNAMIC_PATCHABLE) {
 		/* jmpq  *0x1(%rip)     # <fentry_addr> */
 		memcpy((void *)mdi->trampoline, trampoline, sizeof(trampoline));
 		memcpy((void *)mdi->trampoline + sizeof(trampoline),
@@ -296,14 +296,40 @@ static int patch_fentry_func(struct mcount_dynamic_info *mdi, struct sym *sym)
 {
 	unsigned char nop1[] = { 0x67, 0x0f, 0x1f, 0x04, 0x00 };
 	unsigned char nop2[] = { 0x0f, 0x1f, 0x44, 0x00, 0x00 };
-	unsigned char nop3[] = { 0x90, 0x90, 0x90, 0x90, 0x90 };
 	unsigned char *insn = (void *)sym->addr + mdi->map->start;
 	unsigned int target_addr;
 
 	/* only support calls to __fentry__ at the beginning */
 	if (memcmp(insn, nop1, sizeof(nop1)) &&  /* old pattern */
-	    memcmp(insn, nop2, sizeof(nop2)) &&  /* new pattern */
-	    memcmp(insn, nop3, sizeof(nop3))) {  /* new pattern */
+	    memcmp(insn, nop2, sizeof(nop2))) {  /* new pattern */
+		pr_dbg("skip non-applicable functions: %s\n", sym->name);
+		return INSTRUMENT_FAILED;
+	}
+
+	/* get the jump offset to the trampoline */
+	target_addr = get_target_addr(mdi, (unsigned long)insn);
+	if (target_addr == 0)
+		return INSTRUMENT_SKIPPED;
+
+	/* make a "call" insn with 4-byte offset */
+	insn[0] = 0xe8;
+	/* hopefully we're not patching 'memcpy' itself */
+	memcpy(&insn[1], &target_addr, sizeof(target_addr));
+
+	pr_dbg3("update function '%s' dynamically to call __fentry__\n",
+		sym->name);
+
+	return INSTRUMENT_SUCCESS;
+}
+
+static int patch_patchable_func(struct mcount_dynamic_info *mdi, struct sym *sym)
+{
+	unsigned char nop[] = { 0x90, 0x90, 0x90, 0x90, 0x90 };
+	unsigned char *insn = (void *)sym->addr + mdi->map->start;
+	unsigned int target_addr;
+
+	/* only support calls to __fentry__ at the beginning */
+	if (memcmp(insn, nop, sizeof(nop))) {  /* new pattern */
 		pr_dbg("skip non-applicable functions: %s\n", sym->name);
 		return INSTRUMENT_FAILED;
 	}
@@ -634,6 +660,10 @@ int mcount_patch_func(struct mcount_dynamic_info *mdi, struct sym *sym,
 
 	case DYNAMIC_FENTRY_NOP:
 		result = patch_fentry_func(mdi, sym);
+		break;
+
+	case DYNAMIC_PATCHABLE:
+		result = patch_patchable_func(mdi, sym);
 		break;
 
 	case DYNAMIC_NONE:

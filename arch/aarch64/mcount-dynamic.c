@@ -225,7 +225,7 @@ static unsigned long get_target_addr(struct mcount_dynamic_info *mdi,
 }
 
 #if 1
-static int patch_fpatchable_func(struct mcount_dynamic_info *mdi, struct sym *sym)
+static int patch_patchable_func(struct mcount_dynamic_info *mdi, struct sym *sym)
 {
 	uint32_t push = 0xa9bf7bfd;  /* STP  x29, x30, [sp, #-0x10]! */
 	uint32_t call;
@@ -311,7 +311,7 @@ int mcount_patch_func(struct mcount_dynamic_info *mdi, struct sym *sym,
 
 	switch (adi->type) {
 	case DYNAMIC_PATCHABLE:
-		result = patch_fpatchable_func(mdi, sym);
+		result = patch_patchable_func(mdi, sym);
 		break;
 
 	case DYNAMIC_NONE:
