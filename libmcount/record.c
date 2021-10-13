@@ -23,6 +23,46 @@
 
 #define ARG_STR_MAX	98
 
+#if __ANDROID__
+static int shm_open(const char *name, int oflag, mode_t mode) {
+	size_t namelen;
+	char *fname;
+	int fd;
+
+	/* Construct the filename.  */
+	while (name[0] == '/') ++name;
+
+	if (name[0] == '\0') {
+		/* The name "/" is not supported.  */
+		errno = EINVAL;
+		return -1;
+	}
+
+	namelen = strlen(name);
+	fname = (char *) alloca(sizeof("@TERMUX_PREFIX@/tmp/") - 1 + namelen + 1);
+	memcpy(fname, "@TERMUX_PREFIX@/tmp/", sizeof("@TERMUX_PREFIX@/tmp/") - 1);
+	memcpy(fname + sizeof("@TERMUX_PREFIX@/tmp/") - 1, name, namelen + 1);
+
+	fd = open(fname, oflag, mode);
+	if (fd != -1) {
+		/* We got a descriptor.  Now set the FD_CLOEXEC bit.  */
+		int flags = fcntl(fd, F_GETFD, 0);
+		flags |= FD_CLOEXEC;
+		flags = fcntl(fd, F_SETFD, flags);
+
+		if (flags == -1) {
+			/* Something went wrong.  We cannot return the descriptor.  */
+			int save_errno = errno;
+			close(fd);
+			fd = -1;
+			errno = save_errno;
+		}
+	}
+
+	return fd;
+}
+#endif
+
 static struct mcount_shmem_buffer *allocate_shmem_buffer(char *sess_id, size_t size,
 							 int tid, int idx)
 {
@@ -32,7 +72,7 @@ static struct mcount_shmem_buffer *allocate_shmem_buffer(char *sess_id, size_t s
 
 	snprintf(sess_id, size, SHMEM_SESSION_FMT, mcount_session_name(), tid, idx);
 
-	fd = shm_open(sess_id, O_RDWR | O_CREAT | O_TRUNC, 0600);
+	fd = shm_open(sess_id, O_RDWR | O_CREAT | O_TRUNC, 0600);	// TODO: use ashmem in Android
 	if (fd < 0) {
 		saved_errno = errno;
 		pr_dbg("failed to open shmem buffer: %s\n", sess_id);
@@ -778,7 +818,11 @@ void save_watchpoint(struct mcount_thread_data *mtdp,
 	timestamp -= 1;
 
 	if (watchpoints & MCOUNT_WATCH_CPU) {
+#if __ANDROID__
+		int cpu = 0;
+#else
 		int cpu = sched_getcpu();
+#endif
 
 		if ((mtdp->watch.cpu != cpu || init_watch) &&
 		    mtdp->nr_events < MAX_EVENT) {

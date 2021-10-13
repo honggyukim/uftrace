@@ -1,0 +1,190 @@
+cc_defaults {
+    name: "common_cflags",
+    cflags: [
+        "-Wno-unused-parameter",
+        "-Wno-missing-field-initializers",
+        "-Wno-pointer-arith",
+    ],
+}
+
+cc_library_static {
+    name: "libtraceevent",
+    defaults: [ "common_cflags" ],
+    srcs: [
+        "libtraceevent/event-parse.c",
+        "libtraceevent/event-plugin.c",
+        "libtraceevent/kbuffer-parse.c",
+        "libtraceevent/parse-filter.c",
+        "libtraceevent/parse-utils.c",
+        "libtraceevent/trace-seq.c",
+    ],
+    include_dirs: [
+        "vendor/example/uftrace/libtraceevent/include",
+    ],
+}
+
+cc_defaults {
+    name: "common_utils",
+    defaults: [ "common_cflags" ],
+    srcs: [
+        "utils/argspec.c",
+        "utils/auto-args.c",
+        "utils/debug.c",
+        "utils/demangle.c",
+        "utils/dwarf.c",
+        "utils/filter.c",
+        "utils/hashmap.c",
+        "utils/rbtree.c",
+        "utils/regs.c",
+        "utils/script-luajit.c",
+        "utils/script-python.c",
+        "utils/script.c",
+        "utils/symbol-libelf.c",
+        "utils/symbol-rawelf.c",
+        "utils/symbol.c",
+        "utils/utils.c",
+    ],
+}
+
+cc_defaults {
+    name: "mcount_entry",
+    defaults: [ "common_cflags" ],
+    arch: {
+        x86_64: {
+            srcs: [
+                "arch/x86_64/dynamic.S",
+                "arch/x86_64/fentry.S",
+                "arch/x86_64/mcount.S",
+                "arch/x86_64/plthook.S",
+                "arch/x86_64/xray.S",
+            ],
+            include_dirs: [
+                "vendor/example/uftrace/arch/x86_64",
+            ],
+        },
+        x86: {
+            srcs: [
+                "arch/i386/common.S",
+                "arch/i386/fentry.S",
+                "arch/i386/mcount.S",
+                "arch/i386/plthook.S",
+            ],
+            include_dirs: [
+                "vendor/example/uftrace/arch/i386",
+            ],
+        },
+    },
+    cflags: [
+        "-fPIC",
+        "-fvisibility=hidden",
+        "-fno-omit-frame-pointer",
+        "-mno-sse2",
+        "-minline-all-stringops",
+    ],
+}
+
+cc_library_shared {
+    name: "libmcount",
+    defaults: [
+        "common_cflags",
+        "common_utils",
+        "mcount_entry",
+    ],
+    srcs: [
+        "libmcount/dynamic.c",
+        "libmcount/event.c",
+        "libmcount/mcount.c",
+        "libmcount/misc.c",
+        "libmcount/plthook.c",
+        "libmcount/pmu.c",
+        "libmcount/record.c",
+        "libmcount/wrap.c",
+    ],
+    arch: {
+        x86_64: {
+            srcs: [
+                "arch/x86_64/symbol.c",
+                "arch/x86_64/mcount-dynamic.c",
+                "arch/x86_64/mcount-insn.c",
+                "arch/x86_64/mcount-noplt.c",
+                "arch/x86_64/mcount-support.c",
+                "arch/x86_64/mcount-event.c",
+            ],
+            include_dirs: [
+                "vendor/example/uftrace/arch/x86_64",
+            ],
+        },
+        x86: {
+            srcs: [
+                "arch/i386/mcount-dynamic.c",
+                "arch/i386/mcount-support.c",
+            ],
+            include_dirs: [
+                "vendor/example/uftrace/arch/i386",
+            ],
+        },
+    },
+    static_libs: ["libtraceevent"],
+    cflags: [
+        "-fPIC",
+    ],
+}
+
+cc_binary {
+    name: "uftrace",
+    defaults: [
+        "common_cflags",
+        "common_utils",
+    ],
+    srcs: [
+        "uftrace.c",
+        "cmds/dump.c",
+        "cmds/graph.c",
+        "cmds/info.c",
+        "cmds/live.c",
+        "cmds/record.c",
+        "cmds/recv.c",
+        "cmds/replay.c",
+        "cmds/report.c",
+        "cmds/script.c",
+        "cmds/tui.c",
+        "utils/data-file.c",
+        "utils/extern.c",
+        "utils/field.c",
+        "utils/fstack.c",
+        "utils/graph.c",
+        "utils/kernel.c",
+        "utils/pager.c",
+        "utils/perf.c",
+        "utils/report.c",
+        "utils/session.c",
+    ],
+    arch: {
+        x86_64: {
+            srcs: [
+                "arch/x86_64/cpuinfo.c",
+                "arch/x86_64/symbol.c",
+                "arch/x86_64/mcount-dynamic.c",
+                "arch/x86_64/mcount-insn.c",
+                "arch/x86_64/mcount-noplt.c",
+                "arch/x86_64/mcount-support.c",
+                "arch/x86_64/mcount-event.c",
+            ],
+            include_dirs: [
+                "vendor/example/uftrace/arch/x86_64",
+            ],
+        },
+        x86: {
+            srcs: [
+                "arch/i386/cpuinfo.c",
+                "arch/i386/mcount-dynamic.c",
+                "arch/i386/mcount-support.c",
+            ],
+            include_dirs: [
+                "vendor/example/uftrace/arch/i386",
+            ],
+        },
+    },
+    shared_libs: [],
+    static_libs: ["libtraceevent"],
+}

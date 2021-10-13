@@ -15,6 +15,11 @@
 
 #include "libtraceevent/event-parse.h"
 
+#if __ANDROID__
+#if !defined(__i386__) || __ANDROID_API__ >= __ANDROID_API_J_MR2__
+int ffs(int) __INTRODUCED_IN_X86(18);
+#endif
+#endif
 
 static int column_index;
 static int prev_tid = -1;

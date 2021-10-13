@@ -17,6 +17,10 @@
 #define JMP_INSN_SIZE 6
 #define PLTGOT_SIZE   8
 
+#if __ANDROID__
+#define R_X86_64_GLOB_DAT	6	/* Create GOT entry */
+#endif
+
 int arch_load_dynsymtab_noplt(struct symtab *dsymtab,
 			      struct uftrace_elf_data *elf,
 			      unsigned long offset, unsigned long flags)

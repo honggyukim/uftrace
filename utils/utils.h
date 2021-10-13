@@ -18,6 +18,7 @@
 #include <ctype.h>
 #include <limits.h>
 #include <signal.h>
+#include <libgen.h>
 
 #include "compiler.h"
 

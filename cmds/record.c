@@ -62,6 +62,67 @@ static bool has_perf_event;
 static bool has_sched_event;
 static bool finish_received;
 
+#if __ANDROID__
+static int shm_unlink(const char *name) {
+    size_t namelen;
+    char *fname;
+
+    /* Construct the filename.  */
+    while (name[0] == '/') ++name;
+
+    if (name[0] == '\0') {
+        /* The name "/" is not supported.  */
+        errno = EINVAL;
+        return -1;
+    }
+
+    namelen = strlen(name);
+    fname = (char *) alloca(sizeof("@TERMUX_PREFIX@/tmp/") - 1 + namelen + 1);
+    memcpy(fname, "@TERMUX_PREFIX@/tmp/", sizeof("@TERMUX_PREFIX@/tmp/") - 1);
+    memcpy(fname + sizeof("@TERMUX_PREFIX@/tmp/") - 1, name, namelen + 1);
+
+    return unlink(fname);
+}
+
+static int shm_open(const char *name, int oflag, mode_t mode) {
+    size_t namelen;
+    char *fname;
+    int fd;
+
+    /* Construct the filename.  */
+    while (name[0] == '/') ++name;
+
+    if (name[0] == '\0') {
+        /* The name "/" is not supported.  */
+        errno = EINVAL;
+        return -1;
+    }
+
+    namelen = strlen(name);
+    fname = (char *) alloca(sizeof("@TERMUX_PREFIX@/tmp/") - 1 + namelen + 1);
+    memcpy(fname, "@TERMUX_PREFIX@/tmp/", sizeof("@TERMUX_PREFIX@/tmp/") - 1);
+    memcpy(fname + sizeof("@TERMUX_PREFIX@/tmp/") - 1, name, namelen + 1);
+
+    fd = open(fname, oflag, mode);
+    if (fd != -1) {
+        /* We got a descriptor.  Now set the FD_CLOEXEC bit.  */
+        int flags = fcntl(fd, F_GETFD, 0);
+        flags |= FD_CLOEXEC;
+        flags = fcntl(fd, F_SETFD, flags);
+
+        if (flags == -1) {
+            /* Something went wrong.  We cannot return the descriptor.  */
+            int save_errno = errno;
+            close(fd);
+            fd = -1;
+            errno = save_errno;
+        }
+    }
+
+    return fd;
+}
+#endif
+
 static bool can_use_fast_libmcount(struct opts *opts)
 {
 	if (debug)
@@ -926,7 +987,11 @@ static void unlink_shmem_list(void)
 		sscanf(sl->id, "/uftrace-%[^-]-%*d-%*d", shmem_session);
 		pr_dbg2("unlink for session: %s\n", shmem_session);
 
-		num = scandir("/dev/shm/", &shmem_bufs, filter_shmem, alphasort);
+#if __ANDROID__
+		num = scandir("@TERMUX_PREFIX@/tmp/", &shmem_bufs, filter_shmem, alphasort);
+#else
+		num = scandir("/tmp/", &shmem_bufs, filter_shmem, alphasort);
+#endif
 		for (i = 0; i < num; i++) {
 			sid[0] = '/';
 			memcpy(&sid[1], shmem_bufs[i]->d_name, MSG_ID_SIZE);
