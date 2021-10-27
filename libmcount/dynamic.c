@@ -30,6 +30,7 @@
 #include "utils/rbtree.h"
 #include "utils/list.h"
 #include "utils/hashmap.h"
+#include "mcount-arch.h"
 
 static struct mcount_dynamic_info *mdinfo;
 static struct mcount_dynamic_stats {
@@ -220,11 +221,26 @@ __weak void mcount_cleanup_trampoline(struct mcount_dynamic_info *mdi)
 {
 }
 
-__weak int mcount_patch_func(struct mcount_dynamic_info *mdi, struct sym *sym,
+__weak int mcount_arch_patch_func(struct mcount_dynamic_info *mdi,
+				  struct sym *sym,
+				  struct mcount_disasm_engine *disasm)
+{
+	return -1;
+}
+
+static int mcount_patch_func(struct mcount_dynamic_info *mdi, struct sym *sym,
 			     struct mcount_disasm_engine *disasm,
 			     unsigned min_size)
 {
-	return -1;
+	int result = INSTRUMENT_SKIPPED;
+
+	if (min_size < CALL_INSN_SIZE)
+		min_size = CALL_INSN_SIZE;
+
+	if (sym->size < min_size)
+		return result;
+
+	return mcount_arch_patch_func(mdi, sym, disasm);
 }
 
 __weak int mcount_unpatch_func(struct mcount_dynamic_info *mdi, struct sym *sym,

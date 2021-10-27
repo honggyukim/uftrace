@@ -139,16 +139,10 @@ static int patch_fentry_func(struct mcount_dynamic_info *mdi, struct sym *sym)
 	return 0;
 }
 
-int mcount_patch_func(struct mcount_dynamic_info *mdi, struct sym *sym,
-		      struct mcount_disasm_engine *disasm, unsigned min_size)
+int mcount_arch_patch_func(struct mcount_dynamic_info *mdi, struct sym *sym,
+			   struct mcount_disasm_engine *disasm)
 {
 	int result = INSTRUMENT_SKIPPED;
-
-	if (min_size < CALL_INSN_SIZE)
-		min_size = CALL_INSN_SIZE;
-
-	if (sym->size < min_size)
-		return result;
 
 	switch (mdi->type) {
 	case DYNAMIC_FENTRY_NOP:
