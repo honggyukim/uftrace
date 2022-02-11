@@ -25,6 +25,7 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <getopt.h>
+#include <dirent.h>
 
 /* This should be defined before #include "utils.h" */
 #define PR_FMT "uftrace"
@@ -100,6 +101,8 @@ enum uftrace_short_options {
 	OPT_clock,
 	OPT_usage,
 	OPT_libmcount_path,
+	OPT_library_path,
+	OPT_loc_filter,
 };
 
 /* clang-format off */
@@ -232,7 +235,7 @@ __used static const char uftrace_footer[] =
 "\n";
 
 static const char uftrace_shopts[] =
-	"+aA:b:C:d:D:eE:f:F:hH:kK:lN:P:r:R:s:S:t:T:U:vVW:Z:";
+	"+aA:b:C:d:D:eE:f:F:hH:kK:lL:N:P:r:R:s:S:t:T:U:vVW:Z:";
 
 #define REQ_ARG(name, shopt) { #name, required_argument, 0, shopt }
 #define NO_ARG(name, shopt)  { #name, no_argument, 0, shopt }
@@ -320,6 +323,8 @@ static const struct option uftrace_options[] = {
 	REQ_ARG(signal, OPT_signal),
 	NO_ARG(srcline, OPT_srcline),
 	REQ_ARG(hide, 'H'),
+	REQ_ARG(loc-filter, OPT_loc_filter),
+	REQ_ARG(loc-filter-warning, 'L'), /* the long option is dummy, will change later */
 	REQ_ARG(clock, OPT_clock),
 	NO_ARG(help, 'h'),
 	NO_ARG(usage, OPT_usage),
@@ -537,8 +542,31 @@ static char *remove_trailing_slash(char *path)
 	return path;
 }
 
+static bool is_libmcount_directory(const char *path)
+{
+	DIR *dp = NULL;
+	struct dirent *ent;
+	int ret = false;
+
+	dp = opendir(path);
+	if (dp) {
+		while ((ent = readdir(dp)) != NULL) {
+			if ((ent->d_type == DT_DIR && !strcmp(ent->d_name, "libmcount")) ||
+			    ((ent->d_type == DT_LNK || ent->d_type == DT_REG) &&
+			     !strcmp(ent->d_name, "libmcount.so"))) {
+				ret = true;
+				break;
+			}
+		}
+		closedir(dp);
+	}
+	return ret;
+}
+
 static int parse_option(struct uftrace_opts *opts, int key, char *arg)
 {
+	char *pos;
+
 	switch (key) {
 	case 'F':
 		opts->filter = opt_add_string(opts->filter, arg);
@@ -571,6 +599,25 @@ static int parse_option(struct uftrace_opts *opts, int key, char *arg)
 
 	case 'H':
 		opts->hide = opt_add_string(opts->hide, arg);
+		break;
+
+	case 'L':
+		if (is_libmcount_directory(arg))
+			pr_warn("--libmcount-path option should be used to set libmcount path.\n");
+		/* fall through */
+	case OPT_loc_filter:
+		pos = strstr(arg, "@hide");
+		if (!pos)
+			opts->loc_filter = opt_add_string(opts->loc_filter, arg);
+		else {
+			*pos = '\0';
+			opts->loc_filter = opt_add_prefix_string(opts->loc_filter, "!", arg);
+		}
+		/*
+		 * location filter focuses onto a given location,
+		 * displaying sched event with it is annoying.
+		 */
+		opts->no_sched = true;
 		break;
 
 	case 'v':
@@ -1219,6 +1266,7 @@ static void free_opts(struct uftrace_opts *opts)
 	free(opts->caller);
 	free(opts->watch);
 	free(opts->hide);
+	free(opts->loc_filter);
 	free_parsed_cmdline(opts->run_cmd);
 }
 

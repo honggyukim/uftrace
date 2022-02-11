@@ -225,6 +225,7 @@ struct uftrace_opts {
 	char *caller;
 	char *extern_data;
 	char *hide;
+	char *loc_filter;
 	char *with_syms;
 	char *clock;
 	int mode;
