@@ -400,6 +400,18 @@ bool match_filter_pattern(struct uftrace_pattern *p, char *name)
 	}
 }
 
+bool match_location_filter(struct uftrace_pattern *p, struct uftrace_dbg_info *dinfo, int loc_idx)
+{
+	char *loc;
+
+	if (!dinfo || loc_idx >= dinfo->nr_locs || !dinfo->locs[loc_idx].file)
+		return false;
+
+	loc = dinfo->locs[loc_idx].file->name;
+
+	return match_filter_pattern(p, loc);
+}
+
 void free_filter_pattern(struct uftrace_pattern *p)
 {
 	free(p->patt);
@@ -790,25 +802,12 @@ static int add_trigger_entry(struct rb_root *root, struct uftrace_pattern *patt,
 	struct uftrace_symbol *sym;
 	unsigned i;
 	int ret = 0;
-	int sym_idx;
-	char *pos;
 
 	for (i = 0; i < symtab->nr_sym; i++) {
 		sym = &symtab->sym[i];
 
 		if (tr->flags == TRIGGER_FL_LOC) {
-			sym_idx = sym - symtab->sym;
-
-			if (!dinfo || sym_idx >= dinfo->nr_locs || !dinfo->locs[sym_idx].file)
-				continue;
-
-			if (patt->type == PATT_SIMPLE && strchr(patt->patt, '/') == NULL &&
-			    (pos = strrchr(dinfo->locs[sym_idx].file->name, '/')))
-				pos = pos + 1;
-			else
-				pos = dinfo->locs[sym_idx].file->name;
-
-			if (!match_filter_pattern(patt, pos))
+			if (!match_location_filter(patt, dinfo, i))
 				continue;
 		}
 		else {
@@ -830,12 +829,32 @@ static int add_trigger_entry(struct rb_root *root, struct uftrace_pattern *patt,
 	return ret;
 }
 
+static char *convert_loc(char *patt)
+{
+	char *ret;
+
+	/* remove trailing '/' before conversion to regex */
+	if (patt[strlen(patt) - 1] == '/')
+		patt[strlen(patt) - 1] = '\0';
+
+	/*
+	 * convert to a regex string to match all instances of including patt
+	 * in the path. exceptionally, if patt starts at the root, convert only
+	 * the right.
+	 * for example, if patt is 'cmds', it matches 'cmds', 'cmds/', 'a/cmds'
+	 * and 'a/cmds/b'. it matches 'abc.c', 'a/abc.c' if patt is 'abc.c'.
+	 */
+	xasprintf(&ret, "%s%s%s", (patt[0] == '/') ? "" : "(^|(.*/))", patt, "($|(/.*))");
+
+	return ret;
+}
+
 static void setup_trigger(char *filter_str, struct uftrace_sym_info *sinfo, struct rb_root *root,
 			  unsigned long flags, enum filter_mode *fmode,
 			  struct uftrace_filter_setting *setting)
 {
 	struct strv filters = STRV_INIT;
-	char *name;
+	char *name, *c;
 	int j;
 
 	if (filter_str == NULL)
@@ -884,6 +903,13 @@ static void setup_trigger(char *filter_str, struct uftrace_sym_info *sinfo, stru
 
 		/* use demangled name for triggers (some auto-args need it) */
 		name = demangle(name);
+
+		if (flags & TRIGGER_FL_LOC && !strpbrk(name, REGEX_CHARS)) {
+			c = convert_loc(name);
+			free(name);
+			name = c;
+		}
+
 		init_filter_pattern(setting->ptype, &patt, name);
 		free(name);
 
