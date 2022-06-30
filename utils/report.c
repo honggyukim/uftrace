@@ -14,6 +14,12 @@ static void init_time_stat(struct report_time_stat *ts)
 	ts->min = -1ULL;
 }
 
+static void init_depth_stat(struct report_depth_stat *ds)
+{
+	ds->min = UINT_MAX;
+	ds->max = 0;
+}
+
 static void update_time_stat(struct report_time_stat *ts, uint64_t time_ns, bool recursive)
 {
 	if (recursive)
@@ -25,6 +31,12 @@ static void update_time_stat(struct report_time_stat *ts, uint64_t time_ns, bool
 		ts->min = time_ns;
 	if (ts->max < time_ns)
 		ts->max = time_ns;
+}
+
+static void update_depth_stat(struct report_depth_stat *ds, uint64_t depth)
+{
+	ds->min = MIN(ds->min, depth);
+	ds->max = MAX(ds->max, depth);
 }
 
 static void finish_time_stat(struct report_time_stat *ts, unsigned long call)
@@ -62,6 +74,7 @@ static struct uftrace_report_node *find_or_create_node(struct rb_root *root, con
 	node->loc = NULL;
 	init_time_stat(&node->total);
 	init_time_stat(&node->self);
+	init_depth_stat(&node->depth);
 
 	rb_link_node(&node->name_link, parent, p);
 	rb_insert_color(&node->name_link, root);
@@ -95,6 +108,7 @@ void report_update_node(struct uftrace_report_node *node, struct uftrace_task_re
 	uint64_t self_time;
 	bool recursive = false;
 	int i;
+	struct uftrace_record *rstack = task->rstack;
 
 	fstack = fstack_get(task, task->stack_count);
 	if (fstack == NULL)
@@ -116,6 +130,7 @@ void report_update_node(struct uftrace_report_node *node, struct uftrace_task_re
 
 	update_time_stat(&node->total, total_time, recursive);
 	update_time_stat(&node->self, self_time, false);
+	update_depth_stat(&node->depth, rstack->depth);
 	node->call++;
 	node->loc = loc;
 }
@@ -1074,6 +1089,7 @@ TEST_CASE(report_sort)
 	struct rb_node *rbnode;
 	struct uftrace_report_node *node;
 	static struct uftrace_fstack fstack[TEST_NODES];
+	struct uftrace_record rstack[TEST_NODES];
 	struct uftrace_data handle = {
 		.hdr = {
 			.max_stack = TEST_NODES,
@@ -1083,6 +1099,7 @@ TEST_CASE(report_sort)
 	struct uftrace_task_reader task = {
 		.h = &handle,
 		.func_stack = fstack,
+		.rstack = rstack,
 	};
 	int i;
 
@@ -1097,6 +1114,7 @@ TEST_CASE(report_sort)
 		0,
 		2100,
 	};
+	uint64_t depth[TEST_NODES] = { 2, 1, 0 };
 	int total_order[TEST_NODES] = { 2, 0, 1 };
 	int self_order[TEST_NODES] = { 1, 0, 2 };
 
@@ -1105,6 +1123,7 @@ TEST_CASE(report_sort)
 		fstack[i].addr = i;
 		fstack[i].total_time = total_times[i];
 		fstack[i].child_time = child_times[i];
+		rstack[i].depth = depth[i];
 	}
 
 	for (i = 0; i < TEST_NODES; i++) {
@@ -1186,14 +1205,18 @@ TEST_CASE(report_diff)
 		.nr_tasks = 2,
 	};
 	struct uftrace_fstack orig_fstack[TEST_NODES];
+	struct uftrace_record orig_rstack[TEST_NODES];
 	struct uftrace_task_reader orig_task = {
 		.h = &handle,
 		.func_stack = orig_fstack,
+		.rstack = orig_rstack,
 	};
 	struct uftrace_fstack pair_fstack[TEST_NODES];
+	struct uftrace_record pair_rstack[TEST_NODES];
 	struct uftrace_task_reader pair_task = {
 		.h = &handle,
 		.func_stack = pair_fstack,
+		.rstack = pair_rstack,
 	};
 
 	const char *orig_name[] = { "abc", "foo", "bar" };
@@ -1207,6 +1230,7 @@ TEST_CASE(report_diff)
 		800,
 		2100,
 	};
+	uint64_t orig_depth[TEST_NODES] = { 2, 1, 0 };
 	const char *pair_name[] = { "xyz", "foo", "bar" };
 	uint64_t pair_total_times[TEST_NODES] = {
 		150,
@@ -1218,6 +1242,7 @@ TEST_CASE(report_diff)
 		1800,
 		300,
 	};
+	uint64_t pair_depth[TEST_NODES] = { 1, 1, 0 };
 	int diff_order[] = { 1, -1, 0, 2 };
 	int diff_total[] = { 900, 150, -100, -300 };
 
@@ -1237,6 +1262,7 @@ TEST_CASE(report_diff)
 		orig_fstack[i].addr = i;
 		orig_fstack[i].total_time = orig_total_times[i];
 		orig_fstack[i].child_time = orig_child_times[i];
+		orig_rstack[i].depth = orig_depth[i];
 
 		node = xzalloc(sizeof(*node));
 		report_add_node(&orig_tree, orig_name[i], node);
@@ -1249,6 +1275,7 @@ TEST_CASE(report_diff)
 		pair_fstack[i].addr = i;
 		pair_fstack[i].total_time = pair_total_times[i];
 		pair_fstack[i].child_time = pair_child_times[i];
+		pair_rstack[i].depth = pair_depth[i];
 
 		node = xzalloc(sizeof(*node));
 		report_add_node(&pair_tree, pair_name[i], node);
