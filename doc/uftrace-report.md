@@ -23,9 +23,10 @@ with the `--diff` option.
 REPORT OPTIONS
 ==============
 -f *FIELD*, \--output-fields=*FIELD*
-:   Customize field in the output.  Possible values are: `total`, `total-avg`,
+:   Customize fields in the output.  Possible values are: `total`, `total-avg`,
     `total-min`, `total-max`, `self`, `self-avg`, `self-min`, `self-max`,
-    `call` and `all`.  Multiple fields can be set by using comma.  Special field
+    `call`, `depth-min`, `depth-max` and `all`.
+    Multiple fields can be set by using comma.  Special field
     of 'none' can be used (solely) to hide all fields and 'all' can be used to
     show all fields.
     Default is 'total,self,call'.  See *FIELDS*.
@@ -345,6 +346,8 @@ Each field has following meaning:
  * self-avg: average of self time of each function.
  * self-min: min of self time of each function.
  * self-max: max of self time of each function.
+ * depth-min: minimum depth of each function.
+ * depth-max: maximum depth of each function.
  * call: called count of each function.
 
 The default value is 'total,self,call'.  If given field name starts with "+",
