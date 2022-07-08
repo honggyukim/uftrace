@@ -66,6 +66,7 @@ enum uftrace_short_options {
 	OPT_bind_not,
 	OPT_task_newline,
 	OPT_chrome_trace,
+	OPT_chrome_task_trace,
 	OPT_flame_graph,
 	OPT_graphviz,
 	OPT_sample_time,
@@ -283,6 +284,7 @@ static const struct option uftrace_options[] = {
 	NO_ARG(no-pltbind, OPT_bind_not),
 	NO_ARG(task-newline, OPT_task_newline),
 	NO_ARG(chrome, OPT_chrome_trace),
+	NO_ARG(chrome-task, OPT_chrome_task_trace),
 	NO_ARG(graphviz, OPT_graphviz),
 	NO_ARG(flame-graph, OPT_flame_graph),
 	REQ_ARG(sample-time, OPT_sample_time),
@@ -831,6 +833,10 @@ static int parse_option(struct uftrace_opts *opts, int key, char *arg)
 
 	case OPT_chrome_trace:
 		opts->chrome_trace = true;
+		break;
+
+	case OPT_chrome_task_trace:
+		opts->chrome_task_trace = true;
 		break;
 
 	case OPT_flame_graph:

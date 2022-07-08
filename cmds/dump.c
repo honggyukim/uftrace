@@ -71,6 +71,12 @@ struct uftrace_chrome_dump {
 	bool last_comma;
 };
 
+struct uftrace_chrome_task_dump {
+	struct uftrace_dump_ops ops;
+	unsigned lost_event_cnt;
+	bool last_comma;
+};
+
 struct uftrace_flame_dump {
 	struct uftrace_dump_ops ops;
 	struct rb_root tasks;
@@ -921,6 +927,12 @@ static void dump_chrome_task_rstack(struct uftrace_dump_ops *ops, struct uftrace
 		chrome->lost_event_cnt++;
 }
 
+static void dump_chrome_task_task_rstack(struct uftrace_dump_ops *ops, struct uftrace_task_reader *task,
+				    char *name)
+{
+	dump_chrome_task_rstack(ops, task, name);
+}
+
 static void dump_chrome_kernel_rstack(struct uftrace_dump_ops *ops,
 				      struct uftrace_kernel_reader *kernel, int cpu,
 				      struct uftrace_record *rec, char *name)
@@ -1576,6 +1588,11 @@ int command_dump(int argc, char *argv[], struct uftrace_opts *opts)
 		return -1;
 	}
 
+	if (opts->chrome_task_trace) {
+		opts->depth = 1;
+		handle.depth = 1;
+	}
+
 	fstack_setup_filters(opts, &handle);
 
 	if (opts->show_args)
@@ -1586,6 +1603,19 @@ int command_dump(int argc, char *argv[], struct uftrace_opts *opts)
 			.ops = {
 				.header         = dump_chrome_header,
 				.task_rstack    = dump_chrome_task_rstack,
+				.kernel_func    = dump_chrome_kernel_rstack,
+				.perf_event     = dump_chrome_perf_event,
+				.footer         = dump_chrome_footer,
+			},
+		};
+
+		do_dump_replay(&dump.ops, opts, &handle);
+	}
+	else if (opts->chrome_task_trace) {
+		struct uftrace_chrome_task_dump dump = {
+			.ops = {
+				.header         = dump_chrome_header,
+				.task_rstack    = dump_chrome_task_task_rstack,
 				.kernel_func    = dump_chrome_kernel_rstack,
 				.perf_event     = dump_chrome_perf_event,
 				.footer         = dump_chrome_footer,

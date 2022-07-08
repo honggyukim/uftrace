@@ -261,6 +261,7 @@ struct uftrace_opts {
 	bool want_bind_not;
 	bool task_newline;
 	bool chrome_trace;
+	bool chrome_task_trace;
 	bool comment;
 	bool flame_graph;
 	bool libmcount_single;
