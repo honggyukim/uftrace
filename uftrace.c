@@ -87,6 +87,7 @@ enum uftrace_short_options {
 	OPT_keep_pid,
 	OPT_diff_policy,
 	OPT_event_full,
+	OPT_event_only,
 	OPT_record,
 	OPT_no_args,
 	OPT_libname,
@@ -148,6 +149,7 @@ __used static const char uftrace_help[] =
 "  -D, --depth=DEPTH          Trace functions within DEPTH\n"
 "  -e, --estimate-return      Use only entry record type for safety\n"
 "      --event-full           Show all events outside of function\n"
+"      --event-only           Show event data only\n"
 "  -E, --Event=EVENT          Enable EVENT to save more information\n"
 "      --flame-graph          Dump recorded data in FlameGraph format\n"
 "      --flat                 Use flat output format\n"
@@ -162,7 +164,7 @@ __used static const char uftrace_help[] =
 "      --keep-pid             Keep same pid during execution of traced program\n"
 "      --kernel-buffer=SIZE   Size of kernel tracing buffer (default: 1408K)\n"
 "      --kernel-full          Show kernel functions outside of user\n"
-"      --kernel-only          Dump kernel data only\n"
+"      --kernel-only          Show kernel data only\n"
 "      --kernel-skip-out      Skip kernel functions outside of user (deprecated)\n"
 "  -K, --kernel-depth=DEPTH   Trace kernel functions within DEPTH\n"
 "      --libmcount-single     Use single thread version of libmcount\n"
@@ -311,6 +313,7 @@ static const struct option uftrace_options[] = {
 	REQ_ARG(script, 'S'),
 	REQ_ARG(diff-policy, OPT_diff_policy),
 	NO_ARG(event-full, OPT_event_full),
+	NO_ARG(event-only, OPT_event_only),
 	NO_ARG(no-libcall, OPT_no_libcall),
 	NO_ARG(nest-libcall, 'l'),
 	NO_ARG(libname, OPT_libname),
@@ -944,6 +947,10 @@ static int parse_option(struct uftrace_opts *opts, int key, char *arg)
 
 	case OPT_event_full:
 		opts->event_skip_out = false;
+		break;
+
+	case OPT_event_only:
+		opts->event_only = true;
 		break;
 
 	case OPT_record:

@@ -270,6 +270,7 @@ struct uftrace_opts {
 	bool keep_pid;
 	bool list_event;
 	bool event_skip_out;
+	bool event_only;
 	bool no_event;
 	bool no_sched;
 	bool nest_libcall;

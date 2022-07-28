@@ -1016,6 +1016,12 @@ bool fstack_check_opts(struct uftrace_task_reader *task, struct uftrace_opts *op
 			return false;
 	}
 
+	if (opts->event_only) {
+		/* skip user and kernel functions if --event-only is set */
+		if (rec->type != UFTRACE_EVENT)
+			return false;
+	}
+
 	if (opts->event_skip_out) {
 		/* skip event outside of user functions */
 		if (!task->user_stack_count && rec->type == UFTRACE_EVENT)

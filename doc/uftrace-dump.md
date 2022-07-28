@@ -108,11 +108,14 @@ COMMON ANALYSIS OPTIONS
     options.
 
 \--kernel-only
-:   Dump kernel functions only without user functions.
+:   Show kernel functions only without user functions.
 
 \--event-full
 :   Show all (user) events outside of user functions.  This option is only
     meaningful when used with \--chrome, \--flame-graph or \--graphviz options.
+
+\--event-only
+:   Show event data only.
 
 \--tid=*TID*[,*TID*,...]
 :   Only print functions called by the given tasks.  To see the list of

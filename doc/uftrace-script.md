@@ -90,6 +90,13 @@ COMMON ANALYSIS OPTIONS
 \--kernel-only
 :   Run script kernel functions only without user functions.
 
+\--event-full
+:   Run all (user) events outside of user functions.  This option is only
+    meaningful when used with \--chrome, \--flame-graph or \--graphviz options.
+
+\--event-only
+:   Run script only for event data.
+
 \--tid=*TID*[,*TID*,...]
 :   Run script only for functions called by the given tasks.  To see the list of
     tasks in the data file, you can use `uftrace report --task` or
