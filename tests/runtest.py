@@ -94,10 +94,6 @@ class TestBase:
     feature = set()
 
     def __init__(self, name, result, lang='C', cflags='', ldflags='', sort='task', serial=False):
-        _tmp = tempfile.mkdtemp(prefix='test_%s_' % name)
-        self.keep = False
-        os.chdir(_tmp)
-        self.test_dir = _tmp
         self.name = name
         self.result = result
         self.cflags = cflags
@@ -129,9 +125,6 @@ class TestBase:
     def pr_debug(self, msg):
         if self.debug:
             print(msg)
-
-    def set_keep(self, keep):
-        self.keep = keep
 
     def gen_port(self):
         self.port = random.randint(40000, 50000)
@@ -628,10 +621,7 @@ class TestBase:
         return ret, ''
 
     def __del__(self):
-        if self.keep:
-            sp.call(['mv', self.test_dir, TestBase.origdir])
-        else:
-            sp.call(['rm', '-rf', self.test_dir])
+        pass
 
 RED     = '\033[1;31m'
 GREEN   = '\033[1;32m'
@@ -692,11 +682,16 @@ def run_single_case(case, flags, opts, arg):
     tc = _locals['tc']
     tc.set_debug(arg.debug)
     tc.set_compiler(arg.compiler)
-    tc.set_keep(arg.keep)
     timeout = int(arg.timeout)
 
+    origdir = os.getcwd()
     for flag in flags:
         for opt in opts:
+            test_dir = 'test_%s_%s_%s' % (case, flag, opt)
+            if not os.path.exists(test_dir):
+                os.mkdir(test_dir)
+            os.chdir(test_dir)
+
             cflags = ' '.join(["-" + flag, "-" + opt])
             dif = ''
             ret = tc.build(tc.name, cflags)
@@ -706,6 +701,10 @@ def run_single_case(case, flags, opts, arg):
                     ret, dif = tc.run(case, cflags, arg.diff, timeout)
                     ret = tc.postrun(ret)
             result.append((ret, dif))
+
+            os.chdir(origdir)
+            if not arg.keep:
+                sp.call(['rm', '-rf', test_dir])
 
     return result
 

@@ -21,7 +21,7 @@ class TestCase(TestBase):
         "b" -> "c" [xlabel = "Calls : 1"]
         }
         """)
-        self.result = self.result % os.path.join(self.test_dir, "t-abc")
+ #       self.result = self.result % os.path.join(self.test_dir, "t-abc")
 
     def prepare(self):
         self.subcmd = 'record'
