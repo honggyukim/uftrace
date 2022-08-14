@@ -899,8 +899,7 @@ if __name__ == "__main__":
             _pool = serial_pool if check_serial_case(name) else pool
             clbk = partial(save_test_result, case=name, shared=shared)
 
-            _pool.apply_async(run_single_case, callback=clbk,
-                            args=[name, flags, opts.split(), arg])
+            _pool.apply_async(run_single_case, callback=clbk, args=[name, flags, opts.split(), arg])
         else:
             results = run_single_case(name, flags, opts.split(), arg)
             save_test_result(results, case=name, shared=shared)
