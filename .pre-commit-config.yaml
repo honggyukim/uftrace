@@ -19,3 +19,7 @@ repos:
     -   id: codespell
         args: ['-I', '.codespell_ignore']
         exclude: "libtraceevent/.*"
+-   repo: https://github.com/pocc/pre-commit-hooks
+    rev: master
+    hooks:
+    -   id: clang-tidy
