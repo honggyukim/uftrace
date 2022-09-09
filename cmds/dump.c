@@ -1080,7 +1080,7 @@ static void print_flame_graph(struct uftrace_dump_ops *ops, struct uftrace_graph
 	unsigned long sample = node->nr_calls;
 
 	if (sample && flame->sample_time)
-		sample = (node->time - node->child_time) / flame->sample_time;
+		sample = (node->total_time.sum - node->child_time) / flame->sample_time;
 
 	if (sample) {
 		struct uftrace_graph_node *parent = node;
@@ -1335,10 +1335,10 @@ static void dump_mermaid_footer(struct uftrace_dump_ops *ops, struct uftrace_dat
 				struct uftrace_opts *opts)
 {
 	/* skip empty graph */
-	if (mermaid_graph.root.time == 0 && mermaid_graph.root.nr_edges == 0)
+	if (mermaid_graph.root.total_time.sum == 0 && mermaid_graph.root.nr_edges == 0)
 		return;
 
-	if (mermaid_graph.root.time || mermaid_graph.root.nr_edges) {
+	if (mermaid_graph.root.total_time.sum || mermaid_graph.root.nr_edges) {
 		pr_out("<h2>Function Call Graph for <span style=\"color:blue\">%s</span>",
 		       mermaid_graph.root.name);
 		pr_out("</h2>\n");
