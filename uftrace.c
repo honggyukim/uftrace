@@ -103,6 +103,7 @@ enum uftrace_short_options {
 	OPT_clock,
 	OPT_usage,
 	OPT_libmcount_path,
+	OPT_preload,
 	OPT_mermaid,
 	OPT_library_path,
 	OPT_loc_filter,
@@ -252,6 +253,7 @@ static const char uftrace_shopts[] =
 static const struct option uftrace_options[] = {
 	REQ_ARG(libmcount-path, OPT_libmcount_path),
 	REQ_ARG(library-path, OPT_libmcount_path),
+	REQ_ARG(preload, OPT_preload),
 	REQ_ARG(filter, 'F'),
 	REQ_ARG(notrace, 'N'),
 	REQ_ARG(depth, 'D'),
@@ -779,6 +781,10 @@ static int parse_option(struct uftrace_opts *opts, int key, char *arg)
 
 	case OPT_libmcount_path:
 		opts->lib_path = arg;
+		break;
+
+	case OPT_preload:
+		opts->preload = arg;
 		break;
 
 	case OPT_usage:

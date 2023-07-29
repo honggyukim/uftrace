@@ -149,7 +149,7 @@ void put_libmcount_path(char *libpath)
 static void setup_child_environ(struct uftrace_opts *opts, int argc, char *argv[])
 {
 	char buf[PATH_MAX];
-	char *old_preload, *libpath;
+	char *env_preload, *libpath;
 
 #ifdef INSTALL_LIB_PATH
 	if (!opts->lib_path) {
@@ -358,7 +358,24 @@ static void setup_child_environ(struct uftrace_opts *opts, int argc, char *argv[
 
 	pr_dbg("using %s library for tracing\n", libpath);
 
-	old_preload = getenv("LD_PRELOAD");
+	env_preload = getenv("LD_PRELOAD");
+#if 1
+	{
+		char opt_preload[PATH_MAX] = "";
+		char old_preload[PATH_MAX] = "";
+		char preload[PATH_MAX];
+
+		if (opts->preload)
+			snprintf(opt_preload, sizeof(opt_preload), ":%s", opts->preload);
+		if (env_preload)
+			snprintf(old_preload, sizeof(old_preload), ":%s", env_preload);
+
+		snprintf(preload, sizeof(preload), "%s%s%s", libpath, opt_preload, old_preload);
+
+		fprintf(stderr, "LD_PRELOAD=%s\n", preload);
+		setenv("LD_PRELOAD", preload, 1);
+	}
+#else
 	if (old_preload) {
 		size_t len = strlen(libpath) + strlen(old_preload) + 2;
 		char *preload = xmalloc(len);
@@ -369,6 +386,7 @@ static void setup_child_environ(struct uftrace_opts *opts, int argc, char *argv[
 	}
 	else
 		setenv("LD_PRELOAD", libpath, 1);
+#endif
 
 	put_libmcount_path(libpath);
 	setenv("XRAY_OPTIONS", "patch_premain=false", 1);
