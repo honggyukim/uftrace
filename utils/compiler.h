@@ -37,6 +37,19 @@
 #endif
 #endif
 
+#if defined(__riscv)
+#define cpu_relax() asm volatile("nop" ::: "memory")
+#if __riscv_xlen == 64
+#define full_memory_barrier() asm volatile("nop" ::: "memory")
+#define read_memory_barrier() asm volatile("nop" ::: "memory")
+#define write_memory_barrier() asm volatile("nop" ::: "memory")
+#elif __riscv_xlen == 32
+#define full_memory_barrier() asm volatile("nop" ::: "memory")
+#define read_memory_barrier() asm volatile("nop" ::: "memory")
+#define write_memory_barrier() asm volatile("nop" ::: "memory")
+#endif
+#endif
+
 /* ignore 'restrict' keyword if not supported (before C99) */
 #if !defined(__STDC_VERSION__) || __STDC_VERSION__ < 199901L
 #define restrict
