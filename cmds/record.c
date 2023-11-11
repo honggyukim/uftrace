@@ -1785,6 +1785,7 @@ static void setup_writers(struct writer_data *wd, struct uftrace_opts *opts)
 		int err;
 
 		kernel->pid = wd->pid;
+		kernel->attached_pid = opts->pid;
 		kernel->output_dir = opts->dirname;
 		kernel->depth = opts->kernel_depth;
 		kernel->bufsize = opts->kernel_bufsize;

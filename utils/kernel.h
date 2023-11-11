@@ -11,6 +11,7 @@
 
 struct uftrace_kernel_writer {
 	int pid;
+	int attached_pid;
 	int nr_cpus;
 	int depth;
 	unsigned long bufsize;

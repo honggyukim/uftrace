@@ -480,6 +480,8 @@ static int fill_taskinfo(void *arg)
 		.tasks = RB_ROOT,
 	};
 	int i;
+	int pid = fha->opts->pid;
+	int nr_tid;
 
 	if (read_task_txt_file(&link, fha->opts->dirname, fha->opts->dirname, false, false, false) <
 		    0 &&
@@ -487,15 +489,24 @@ static int fill_taskinfo(void *arg)
 		return -1;
 
 	walk_tasks(&link, build_tid_list, &tlist);
+	nr_tid = tlist.nr;
+	if (pid > 0)
+		nr_tid++;
 
 	dprintf(fha->fd, "taskinfo:lines=%d\n", NUM_TASK_INFO);
-	dprintf(fha->fd, "taskinfo:nr_tid=%d\n", tlist.nr);
+	dprintf(fha->fd, "taskinfo:nr_tid=%d\n", nr_tid);
 
 	dprintf(fha->fd, "taskinfo:tids=");
 	for (i = 0; i < tlist.nr; i++) {
 		dprintf(fha->fd, "%s%d", first ? "" : ",", tlist.tid[i]);
 		first = false;
 	}
+	if (pid > 0) {
+		dprintf(fha->fd, "%s%d", first ? "" : ",", pid);
+		fha->opts->pid = 0;
+		first = false;
+	}
+
 	dprintf(fha->fd, "\n");
 
 	delete_sessions(&link);

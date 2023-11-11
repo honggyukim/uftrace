@@ -368,6 +368,9 @@ static int __setup_kernel_tracing(struct uftrace_kernel_writer *kernel)
 	if (set_tracing_pid(kernel->pid) < 0)
 		goto out;
 
+	if (set_tracing_pid(kernel->attached_pid) < 0)
+		goto out;
+
 	if (set_tracing_filter(kernel) < 0)
 		goto out;
 
@@ -1434,7 +1437,7 @@ retry:
 		return -1;
 
 	*taskp = get_task_handle(handle, first_tid);
-	if (*taskp == NULL || (*taskp)->fp == NULL) {
+	if (*taskp == NULL) {
 		/* force re-read on that cpu */
 		kernel->rstack_valid[first_cpu] = false;
 
