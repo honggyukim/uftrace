@@ -983,7 +983,7 @@ static int parse_option(struct uftrace_opts *opts, int key, char *arg)
 	case OPT_rt_prio:
 		opts->rt_prio = strtol(arg, NULL, 0);
 		if (opts->rt_prio < 1 || opts->rt_prio > 99) {
-			pr_use("invalid rt prioity: %d (ignoring...)\n", opts->rt_prio);
+                        pr_use("invalid rt priority: %d (ignoring...)\n", opts->rt_prio);
 			opts->rt_prio = 0;
 		}
 		break;
