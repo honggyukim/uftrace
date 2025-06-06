@@ -5,6 +5,7 @@ import multiprocessing
 import os
 import random
 import re
+import shutil
 import socket
 import subprocess as sp
 import sys
@@ -1022,8 +1023,7 @@ if __name__ == "__main__":
             flags[i] += '=%d' % patch_size[m]
 
     def has_compiler(compiler):
-        installed = os.system('command -v %s > /dev/null' % compiler) == 0
-        return installed
+        return shutil.which(compiler) is not None
 
     compilers = []
     if arg.python:
