@@ -100,7 +100,7 @@ $ uftrace replay -f+module
 or simply:
 $ uftrace -la -A udev_new@arg1/s -f+module lsusb  # -f+module adds the module name
 # DURATION     TID        MODULE NAME   FUNCTION
- 306.339 us [ 23561]            lsusb | setlocale(LC_TYPE, "") = "en_US.UTF-8";
+ 306.339 us [ 23561]            lsusb | setlocale(LC_CTYPE, "") = "en_US.UTF-8";
    1.163 us [ 23561]            lsusb | getopt_long(1, 0x7fff7175f6a8, "D:vtP:p:s:d:Vh") = -1;
             [ 23561]            lsusb | udev_new("POSIXLY_CORRECT") {
    0.406 us [ 23561] libudev.so.1.7.2 |   malloc(16) = 0x55e07277a7b0;
