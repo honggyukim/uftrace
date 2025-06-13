@@ -587,10 +587,10 @@ int start_kernel_tracing(struct uftrace_kernel_writer *kernel)
 	return 0;
 
 out:
-	for (i = 0; kernel->nr_cpus; i++) {
-		close(kernel->traces[i]);
-		close(kernel->fds[i]);
-	}
+        for (i = 0; i < kernel->nr_cpus; i++) {
+                close(kernel->traces[i]);
+                close(kernel->fds[i]);
+        }
 
 	free(kernel->traces);
 	free(kernel->fds);
