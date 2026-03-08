@@ -53,6 +53,8 @@ struct uftrace_dump_ops {
 	/* this is called for each perf event (except for schedule) */
 	void (*perf_event)(struct uftrace_dump_ops *ops, struct uftrace_perf_reader *perf,
 			   struct uftrace_record *frs);
+	/* this is called before the first event for a task when --time-range is used */
+	void (*begin_time_range)(struct uftrace_dump_ops *ops, struct uftrace_task_reader *task);
 	/* this is called at the end */
 	void (*footer)(struct uftrace_dump_ops *ops, struct uftrace_data *handle,
 		       struct uftrace_opts *opts);
@@ -1679,6 +1681,69 @@ static void dump_replay_event(struct uftrace_dump_ops *ops, struct uftrace_task_
 	}
 }
 
+/*
+ * dump_chrome_begin_time_range - emit synthetic B events for functions active
+ *                                at the start of --time-range
+ *
+ * When --time-range is used, functions entered before the range start but
+ * exiting within the range would produce orphaned E events with no matching B.
+ * This emits synthetic B events at range_start for all such active functions,
+ * so the Chrome trace viewer shows complete, well-formed call stacks.
+ */
+static void dump_chrome_begin_time_range(struct uftrace_dump_ops *ops,
+					 struct uftrace_task_reader *task)
+{
+	struct uftrace_chrome_dump *chrome = container_of(ops, typeof(*chrome), ops);
+	uint64_t range_start = task->h->time_range.start;
+	struct uftrace_record *saved_rstack = task->rstack;
+	struct uftrace_record syn_rec;
+	int top;
+	int i;
+
+	/*
+	 * Determine how many frames need synthetic B events.
+	 *
+	 * For ENTRY: stack_count was already incremented for the just-entered
+	 * function, which will get a natural B event from the main loop; only
+	 * emit synthetic B events for the frames below it (0..stack_count-2).
+	 *
+	 * For EXIT: stack_count was already decremented; the exiting function
+	 * sits at func_stack[stack_count] and needs a synthetic B event too,
+	 * so include one extra frame (0..stack_count).
+	 *
+	 * For EVENT and other types: all frames on the stack (0..stack_count-1)
+	 * need synthetic B events.
+	 */
+	if (saved_rstack->type == UFTRACE_ENTRY)
+		top = task->stack_count - 1;
+	else if (saved_rstack->type == UFTRACE_EXIT)
+		top = task->stack_count + 1;
+	else
+		top = task->stack_count;
+
+	/*
+	 * Use a local copy for the synthetic record so we never overwrite
+	 * task->ustack / task->kstack (saved_rstack may point to one of them).
+	 */
+	syn_rec = *saved_rstack;
+	syn_rec.time = range_start;
+	syn_rec.type = UFTRACE_ENTRY;
+	syn_rec.more = 0;
+	task->rstack = &syn_rec;
+
+	for (i = 0; i < top; i++) {
+		struct uftrace_fstack *fstack = fstack_get(task, i);
+
+		if (fstack == NULL || fstack->addr == 0)
+			continue;
+
+		syn_rec.addr = fstack->addr;
+		dump_replay_func(ops, task, chrome->opts);
+	}
+
+	task->rstack = saved_rstack;
+}
+
 static void do_dump_replay(struct uftrace_dump_ops *ops, struct uftrace_opts *opts,
 			   struct uftrace_data *handle)
 {
@@ -1690,6 +1755,14 @@ static void do_dump_replay(struct uftrace_dump_ops *ops, struct uftrace_opts *op
 
 	while (!read_rstack(handle, &task) && !uftrace_done) {
 		struct uftrace_record *frs = task->rstack;
+		/*
+		 * Save display_depth_set before check_task_rstack() because
+		 * for EXIT records fstack_update() sets it inside that call.
+		 * display_depth_set is initialized to false when time_range.start
+		 * is set, so !display_depth_set reliably identifies the first
+		 * in-range record for each task without extra allocation.
+		 */
+		bool first_event = ops->begin_time_range && !task->display_depth_set;
 
 		task->timestamp_last = frs->time;
 
@@ -1699,6 +1772,9 @@ static void do_dump_replay(struct uftrace_dump_ops *ops, struct uftrace_opts *op
 		if (prev_time > frs->time)
 			call_if_nonull(ops->inverted_time, ops, task);
 		prev_time = frs->time;
+
+		if (first_event)
+			ops->begin_time_range(ops, task);
 
 		if (task->rstack->type == UFTRACE_EVENT)
 			dump_replay_event(ops, task);
@@ -1788,11 +1864,12 @@ int command_dump(int argc, char *argv[], struct uftrace_opts *opts)
 	if (opts->chrome_trace) {
 		struct uftrace_chrome_dump dump = {
 			.ops = {
-				.header         = dump_chrome_header,
-				.task_rstack    = dump_chrome_task_rstack,
-				.kernel_func    = dump_chrome_kernel_rstack,
-				.perf_event     = dump_chrome_perf_event,
-				.footer         = dump_chrome_footer,
+				.header           = dump_chrome_header,
+				.task_rstack      = dump_chrome_task_rstack,
+				.kernel_func      = dump_chrome_kernel_rstack,
+				.perf_event       = dump_chrome_perf_event,
+				.begin_time_range = dump_chrome_begin_time_range,
+				.footer           = dump_chrome_footer,
 			},
 			.opts = opts,
 		};
