@@ -1668,6 +1668,8 @@ static struct uftrace_record *get_task_ustack(struct uftrace_data *handle, int i
 			 * Track pre-range function addresses in func_stack so
 			 * that chrome dump can emit synthetic B events for
 			 * functions that were active at the range start.
+			 * Note: EXIT records store depth = ENTRY_depth - 1, so
+			 * the function's own slot is at curr->depth + 1.
 			 */
 			if (handle->time_range.start && task->func_stack &&
 			    curr->depth < handle->hdr.max_stack) {
@@ -1675,7 +1677,7 @@ static struct uftrace_record *get_task_ustack(struct uftrace_data *handle, int i
 					task->func_stack[curr->depth].addr = curr->addr;
 				else if (curr->type == UFTRACE_EXIT &&
 					 curr->time < handle->time_range.start)
-					task->func_stack[curr->depth].addr = 0;
+					task->func_stack[curr->depth + 1].addr = 0;
 			}
 			continue;
 		}
