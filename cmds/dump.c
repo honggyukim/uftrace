@@ -1707,9 +1707,8 @@ static void dump_chrome_begin_time_range(struct uftrace_dump_ops *ops,
 	 * function, which will get a natural B event from the main loop; only
 	 * emit synthetic B events for the frames below it (0..stack_count-2).
 	 *
-	 * For EXIT: stack_count was already decremented; the exiting function
-	 * sits at func_stack[stack_count] and needs a synthetic B event too,
-	 * so include one extra frame (0..stack_count).
+	 * For EXIT: fstack_account_time() corrects stack_count to include the
+	 * exiting function's slot, so one extra frame covers it (0..stack_count).
 	 *
 	 * For EVENT and other types: all frames on the stack (0..stack_count-1)
 	 * need synthetic B events.

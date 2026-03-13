@@ -1921,8 +1921,33 @@ static void fstack_account_time(struct uftrace_task_reader *task)
 	if (!task->fstack_set) {
 		/* inherit stack count after [v]fork() or recover from lost */
 		task->stack_count = rstack->depth;
-		if (rstack->type == UFTRACE_EXIT)
+		if (rstack->type == UFTRACE_EXIT) {
 			task->stack_count++;
+
+			/*
+			 * Some tracers (e.g. the QEMU plugin) record EXIT with
+			 * depth = ENTRY_depth - 1 because they decrement the
+			 * depth counter before writing the EXIT record, whereas
+			 * mcount-based instrumentation uses the same depth for
+			 * both ENTRY and EXIT.
+			 *
+			 * Detect this convention: if the pre-range-tracked
+			 * address at func_stack[stack_count] matches the EXIT
+			 * record's address, the exiting function's slot is one
+			 * level deeper than stack_count, so increment stack_count
+			 * to cover it.  This ensures that the init loop below,
+			 * the EXIT duration accounting, and the remaining-
+			 * functions loop in the caller all operate on the correct
+			 * indices.
+			 *
+			 * Ideally the QEMU plugin should be fixed to use the same
+			 * convention as mcount.  Until then, this heuristic
+			 * handles existing recorded data transparently.
+			 */
+			if (task->func_stack && task->stack_count < task->h->hdr.max_stack &&
+			    task->func_stack[task->stack_count].addr == rstack->addr)
+				task->stack_count++;
+		}
 
 		task->fstack_set = true;
 
