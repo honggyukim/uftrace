@@ -2643,6 +2643,18 @@ static struct uftrace_record exec_record[] = {
 	{ 900, UFTRACE_EXIT, false, RECORD_MAGIC, 0, 0x40000 }, // main
 };
 
+/* records for filter/time-range unit tests: main -> a -> b -> c call chain */
+static struct uftrace_record filter_record[] = {
+	{ 100, UFTRACE_ENTRY, false, RECORD_MAGIC, 0, 0x40000 }, /* main entry */
+	{ 150, UFTRACE_ENTRY, false, RECORD_MAGIC, 1, 0x41000 }, /* a entry */
+	{ 200, UFTRACE_ENTRY, false, RECORD_MAGIC, 2, 0x42000 }, /* b entry */
+	{ 300, UFTRACE_ENTRY, false, RECORD_MAGIC, 3, 0x43000 }, /* c entry (range_start) */
+	{ 400, UFTRACE_EXIT, false, RECORD_MAGIC, 3, 0x43000 }, /* c exit */
+	{ 500, UFTRACE_EXIT, false, RECORD_MAGIC, 2, 0x42000 }, /* b exit */
+	{ 550, UFTRACE_EXIT, false, RECORD_MAGIC, 1, 0x41000 }, /* a exit */
+	{ 600, UFTRACE_EXIT, false, RECORD_MAGIC, 0, 0x40000 }, /* main exit */
+};
+
 static struct uftrace_session test_sess;
 static struct uftrace_data fstack_test_handle;
 static void fstack_test_finish_file(void);
@@ -2760,6 +2772,60 @@ static int fstack_test_setup_exec(struct uftrace_data *handle)
 	handle->sessions.first->sym_info.exec_map = &map;
 
 	return fstack_test_setup_file(handle, 1, test_tids, ARRAY_SIZE(exec_record), exec_tests);
+}
+
+static int fstack_test_setup_filter(struct uftrace_data *handle, char *filter_str, char *caller_str,
+				    uint64_t range_start, uint64_t range_stop)
+{
+	struct uftrace_record *filter_tests[] = { filter_record };
+	static struct uftrace_symbol filter_syms[] = {
+		{ .addr = 0x0000, .size = 16, .name = "main", .type = ST_LOCAL_FUNC },
+		{ .addr = 0x1000, .size = 16, .name = "a", .type = ST_LOCAL_FUNC },
+		{ .addr = 0x2000, .size = 16, .name = "b", .type = ST_LOCAL_FUNC },
+		{ .addr = 0x3000, .size = 16, .name = "c", .type = ST_LOCAL_FUNC },
+	};
+	static struct uftrace_module filter_mod = {
+		.symtab = { .sym = filter_syms, .nr_sym = ARRAY_SIZE(filter_syms) },
+	};
+	static struct uftrace_mmap filter_map = {
+		.mod = &filter_mod,
+		.start = 0x40000,
+		.end = 0x50000,
+	};
+	struct uftrace_msg_sess smsg = {
+		.task = { .pid = test_tids[0], .tid = test_tids[0] },
+		.sid = "uftrace-session",
+		.namelen = 8,
+	};
+	char name[] = "unittest";
+	struct uftrace_filter_setting setting = {
+		.ptype = PATT_SIMPLE,
+	};
+
+	/* reset sessions and filter state for a clean slate each run */
+	memset(&handle->sessions, 0, sizeof(handle->sessions));
+	memset(&fstack_triggers, 0, sizeof(fstack_triggers));
+
+	create_session(&handle->sessions, &smsg, "tests", "tests", name, true, false, false);
+	create_task(&handle->sessions, &smsg.task, false);
+
+	handle->sessions.first->sym_info.maps = &filter_map;
+	handle->sessions.first->sym_info.exec_map = &filter_map;
+
+	/* set time range before fstack_setup_task so display_depth_set is correct */
+	handle->time_range.start = range_start;
+	handle->time_range.stop = range_stop;
+
+	if (fstack_test_setup_file(handle, 1, test_tids, ARRAY_SIZE(filter_record), filter_tests) <
+	    0)
+		return -1;
+
+	if (filter_str)
+		setup_fstack_filters(handle, filter_str, NULL, NULL, NULL, NULL, &setting);
+	if (caller_str)
+		setup_fstack_filters(handle, NULL, NULL, caller_str, NULL, NULL, &setting);
+
+	return 0;
 }
 
 static void fstack_test_finish_file(void)
@@ -2911,6 +2977,111 @@ TEST_CASE(fstack_fixup)
 		pr_dbg("adjust stack count after filter check\n");
 		fstack_check_filter_done(task);
 	}
+
+	return TEST_OK;
+}
+
+/*
+ * Verify that when --time-range=T~ is combined with -F func, pre-range stack
+ * frames that do NOT match the -F filter get FSTACK_FL_NORECORD set during
+ * fstack_account_time().  Without the fix, fstack_get_filter_mode() returns
+ * FILTER_MODE_IN but the per-frame check was missing, so those frames would
+ * leak out as synthetic B events at range_start.
+ *
+ * Scenario: main(t=100) -> a(t=150) -> b(t=200) -> c(t=300, range_start) with -F c.
+ * After read_rstack() returns c's ENTRY, main, a and b must have FSTACK_FL_NORECORD.
+ */
+TEST_CASE(fstack_filter_mode_in_range)
+{
+	struct uftrace_data *handle = &fstack_test_handle;
+	struct uftrace_task_reader *task;
+	struct uftrace_fstack *fstack;
+
+	TEST_EQ(fstack_test_setup_filter(handle, "c", NULL, 300, 0), 0);
+
+	pr_dbg("read first in-range rstack (c's ENTRY at t=300)\n");
+	TEST_EQ(read_rstack(handle, &task), 0);
+
+	pr_dbg("check that the returned record is c's ENTRY\n");
+	TEST_EQ((uint64_t)task->rstack->addr, (uint64_t)0x43000);
+	TEST_EQ((uint64_t)task->rstack->type, (uint64_t)UFTRACE_ENTRY);
+
+	pr_dbg("check that pre-range frames (main, a, b) got FSTACK_FL_NORECORD\n");
+	fstack = fstack_get(task, 0); /* main */
+	TEST_NE(fstack, NULL);
+	TEST_NE((uint64_t)(fstack->flags & FSTACK_FL_NORECORD), 0ULL);
+
+	fstack = fstack_get(task, 1); /* a */
+	TEST_NE(fstack, NULL);
+	TEST_NE((uint64_t)(fstack->flags & FSTACK_FL_NORECORD), 0ULL);
+
+	fstack = fstack_get(task, 2); /* b */
+	TEST_NE(fstack, NULL);
+	TEST_NE((uint64_t)(fstack->flags & FSTACK_FL_NORECORD), 0ULL);
+
+	return TEST_OK;
+}
+
+/*
+ * Verify that when --time-range=T~T is combined with -C func, a function
+ * whose ENTRY is in-range but whose EXIT falls after range_stop does NOT
+ * appear in the output.
+ *
+ * Scenario: main(100) -> a(150) -> b(200) -> c(300, range_start=range_stop) with -C b.
+ * c's EXIT at t=400 is post-range.  The fix removes c's ENTRY from rstack_list
+ * when the post-range EXIT is seen (c does not have TRIGGER_FL_CALLER), so
+ * read_rstack() should return EOF without yielding any record.
+ */
+TEST_CASE(fstack_caller_filter_range)
+{
+	struct uftrace_data *handle = &fstack_test_handle;
+	struct uftrace_task_reader *task;
+
+	TEST_EQ(fstack_test_setup_filter(handle, NULL, "b", 300, 300), 0);
+
+	pr_dbg("read_rstack should return EOF: c not matched by -C b, exit post-range\n");
+	TEST_EQ(read_rstack(handle, &task), -1);
+
+	return TEST_OK;
+}
+
+/*
+ * Verify that when --time-range=T~ is combined with -N func, all frames
+ * nested inside the notrace function get FSTACK_FL_NORECORD propagated
+ * via out_count, just as fstack_entry() does for in-range functions.
+ *
+ * Scenario: main(t=100) -> a(t=150) -> b(t=200) -> c(t=300, range_start) with -N main.
+ * main must have FSTACK_FL_NOTRACE|FSTACK_FL_NORECORD, and a and b must also
+ * have FSTACK_FL_NORECORD because out_count > 0 when they are processed.
+ * Without the fix, a and b lacked FSTACK_FL_NORECORD and would leak as
+ * spurious synthetic B events at range_start.
+ */
+TEST_CASE(fstack_notrace_range)
+{
+	struct uftrace_data *handle = &fstack_test_handle;
+	struct uftrace_task_reader *task;
+	struct uftrace_fstack *fstack;
+
+	TEST_EQ(fstack_test_setup_filter(handle, "!main", NULL, 300, 0), 0);
+
+	pr_dbg("read first in-range rstack (c's ENTRY at t=300)\n");
+	TEST_EQ(read_rstack(handle, &task), 0);
+
+	pr_dbg("check that main has FSTACK_FL_NOTRACE and FSTACK_FL_NORECORD\n");
+	fstack = fstack_get(task, 0); /* main */
+	TEST_NE(fstack, NULL);
+	TEST_NE((uint64_t)(fstack->flags & FSTACK_FL_NOTRACE), 0ULL);
+	TEST_NE((uint64_t)(fstack->flags & FSTACK_FL_NORECORD), 0ULL);
+
+	pr_dbg("check that a has FSTACK_FL_NORECORD (propagated via out_count)\n");
+	fstack = fstack_get(task, 1); /* a */
+	TEST_NE(fstack, NULL);
+	TEST_NE((uint64_t)(fstack->flags & FSTACK_FL_NORECORD), 0ULL);
+
+	pr_dbg("check that b has FSTACK_FL_NORECORD (propagated via out_count)\n");
+	fstack = fstack_get(task, 2); /* b */
+	TEST_NE(fstack, NULL);
+	TEST_NE((uint64_t)(fstack->flags & FSTACK_FL_NORECORD), 0ULL);
 
 	return TEST_OK;
 }
