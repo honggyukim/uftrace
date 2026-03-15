@@ -1789,6 +1789,55 @@ static void do_dump_replay(struct uftrace_dump_ops *ops, struct uftrace_opts *op
 		fstack_check_filter_done(task);
 	}
 
+	/*
+	 * Emit synthetic entry events for tasks whose only in-range records
+	 * were filtered out before reaching the main loop (e.g. by -C when
+	 * the caller-matched function exits after range_stop).
+	 * fstack_account_time() was called early in get_task_ustack() so
+	 * stack_count and func_stack are valid, but first_event never fired.
+	 */
+	if (handle->time_range.start) {
+		for (i = 0; i < handle->nr_tasks; i++) {
+			struct uftrace_record syn = {
+				.time = handle->time_range.start,
+				.more = 0,
+			};
+			struct uftrace_fstack *top_fstack;
+
+			task = &handle->tasks[i];
+
+			if (!task->fstack_set || task->stack_count == 0)
+				continue;
+
+			if (task->display_depth_set)
+				continue;
+
+			/*
+			 * If the early fstack_account_time() stored a first
+			 * in-range ENTRY at func_stack[stack_count] (addr != 0),
+			 * and that entry is not filtered out (no NORECORD flag),
+			 * use EXIT type so dump_replay_func_before_range includes
+			 * it (top = stack_count + 1).  Expand stack_count only
+			 * after the call so the function sees the correct value.
+			 */
+			top_fstack = fstack_get(task, task->stack_count);
+			if (top_fstack && top_fstack->addr != 0 &&
+			    !(top_fstack->flags & FSTACK_FL_NORECORD)) {
+				syn.type = UFTRACE_EXIT;
+			}
+			else {
+				syn.type = UFTRACE_EVENT;
+			}
+
+			task->rstack = &syn;
+			dump_replay_func_before_range(ops, opts, task);
+			task->rstack = NULL;
+
+			if (syn.type == UFTRACE_EXIT)
+				task->stack_count++;
+		}
+	}
+
 	/* add duration of remaining functions */
 	for (i = 0; i < handle->nr_tasks; i++) {
 		uint64_t last_time;
