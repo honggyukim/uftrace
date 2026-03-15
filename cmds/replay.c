@@ -1134,6 +1134,57 @@ static void print_remaining_stack(struct uftrace_opts *opts, struct uftrace_data
 	}
 }
 
+/*
+ * replay_func_before_range - emit synthetic entry lines for functions active
+ *                            at the start of --time-range in replay mode.
+ *
+ * When --time-range is used, functions entered before range_start but exiting
+ * within the range produce orphaned "}" lines with no matching "func() {".
+ * This function prints synthetic "func() {" lines for all such active frames,
+ * mirroring the dump_replay_func_before_range() logic used in dump mode.
+ */
+static void replay_func_before_range(struct uftrace_data *handle, struct uftrace_task_reader *task,
+				     struct uftrace_opts *opts)
+{
+	struct uftrace_session_link *sessions = &handle->sessions;
+	uint64_t range_start = handle->time_range.start;
+	struct uftrace_record *rstack = task->rstack;
+	int top;
+	int i;
+
+	if (rstack->type == UFTRACE_ENTRY)
+		top = task->stack_count - 1;
+	else if (rstack->type == UFTRACE_EXIT)
+		top = task->stack_count + 1;
+	else
+		top = task->stack_count;
+
+	for (i = 0; i < top; i++) {
+		struct uftrace_fstack *fstack = fstack_get(task, i);
+		struct uftrace_symbol *sym;
+		char *symname;
+		int depth;
+
+		if (fstack == NULL || fstack->addr == 0)
+			continue;
+
+		if (fstack->flags & FSTACK_FL_NORECORD)
+			continue;
+
+		sym = task_find_sym_addr(sessions, task, range_start, fstack->addr);
+		symname = symbol_getname(sym, fstack->addr);
+		depth = task->display_depth + task_column_depth(task, opts);
+
+		print_field(task, fstack, NO_TIME);
+		pr_out("%*s%s() {\n", depth * 2, "", symname);
+
+		fstack_update(UFTRACE_ENTRY, task, fstack);
+		symbol_putname(sym, symname);
+	}
+
+	task->display_depth_set = true;
+}
+
 int command_replay(int argc, char *argv[], struct uftrace_opts *opts)
 {
 	int ret;
@@ -1168,6 +1219,14 @@ int command_replay(int argc, char *argv[], struct uftrace_opts *opts)
 	while (read_rstack(&handle, &task) == 0 && !uftrace_done) {
 		struct uftrace_record *rstack = task->rstack;
 		uint64_t curr_time = rstack->time;
+		/*
+		 * Capture display_depth_set before fstack_check_opts() because
+		 * EXIT records cause fstack_update() to set it inside that call.
+		 * display_depth_set starts false when time_range.start is active,
+		 * so !display_depth_set reliably identifies the first in-range
+		 * record per task.
+		 */
+		bool first_event = handle.time_range.start && !task->display_depth_set;
 
 		if (!fstack_check_opts(task, opts))
 			continue;
@@ -1182,6 +1241,9 @@ int command_replay(int argc, char *argv[], struct uftrace_opts *opts)
 				print_warning(task);
 			prev_time = rstack->time;
 		}
+
+		if (first_event && !opts->flat && opts->caller)
+			replay_func_before_range(&handle, task, opts);
 
 		if (opts->flat)
 			ret = print_flat_rstack(&handle, task, opts);
