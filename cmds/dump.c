@@ -1744,6 +1744,74 @@ static void dump_replay_func_before_range(struct uftrace_dump_ops *ops, struct u
 	*task->rstack = saved_content;
 }
 
+/*
+ * dump_replay_func_emit_remaining_exits - emit synthetic exit events for functions
+ *                                still active at the end of replay
+ *
+ * After the main replay loop, functions that were entered but never exited
+ * (either because the trace ended or because --time-range cut off the exits)
+ * need synthetic exit events so the output is well-formed.  This is called
+ * for all dump modes that use do_dump_replay(), including the no-time-range
+ * case where programs exit without returning from all active functions.
+ */
+static void dump_replay_func_emit_remaining_exits(struct uftrace_dump_ops *ops, struct uftrace_opts *opts,
+					 struct uftrace_data *handle)
+{
+	struct uftrace_task_reader *task;
+	int i;
+
+	for (i = 0; i < handle->nr_tasks; i++) {
+		uint64_t last_time;
+
+		task = &handle->tasks[i];
+
+		if (task->stack_count == 0)
+			continue;
+
+		last_time = task->timestamp_last;
+
+		while (--task->stack_count >= 0) {
+			struct uftrace_fstack *fstack;
+			struct uftrace_session *fsess = handle->sessions.first;
+
+			fstack = fstack_get(task, task->stack_count);
+			if (fstack == NULL)
+				continue;
+
+			if (fstack->addr == 0)
+				continue;
+
+			fstack->total_time = last_time - fstack->total_time;
+			if (fstack->child_time > fstack->total_time)
+				fstack->total_time = fstack->child_time;
+
+			if (task->stack_count > 0)
+				fstack[-1].child_time += fstack->total_time;
+
+			/* make sure is_kernel_record() working correctly */
+			if (is_kernel_address(&fsess->sym_info, fstack->addr))
+				task->rstack = &task->kstack;
+			else
+				task->rstack = &task->ustack;
+
+			task->rstack->time = last_time;
+			task->rstack->type = UFTRACE_EXIT;
+			task->rstack->addr = fstack->addr;
+			task->rstack->more = 0;
+
+			if (!check_task_rstack(task, opts))
+				continue;
+
+			if (task->rstack->type == UFTRACE_EVENT)
+				dump_replay_event(ops, task);
+			else
+				dump_replay_func(ops, task, opts);
+
+			fstack_check_filter_done(task);
+		}
+	}
+}
+
 static void do_dump_replay(struct uftrace_dump_ops *ops, struct uftrace_opts *opts,
 			   struct uftrace_data *handle)
 {
@@ -1833,57 +1901,7 @@ static void do_dump_replay(struct uftrace_dump_ops *ops, struct uftrace_opts *op
 		}
 	}
 
-	/* add duration of remaining functions */
-	for (i = 0; i < handle->nr_tasks; i++) {
-		uint64_t last_time;
-
-		task = &handle->tasks[i];
-
-		if (task->stack_count == 0)
-			continue;
-
-		last_time = task->timestamp_last;
-
-		while (--task->stack_count >= 0) {
-			struct uftrace_fstack *fstack;
-			struct uftrace_session *fsess = handle->sessions.first;
-
-			fstack = fstack_get(task, task->stack_count);
-			if (fstack == NULL)
-				continue;
-
-			if (fstack->addr == 0)
-				continue;
-
-			fstack->total_time = last_time - fstack->total_time;
-			if (fstack->child_time > fstack->total_time)
-				fstack->total_time = fstack->child_time;
-
-			if (task->stack_count > 0)
-				fstack[-1].child_time += fstack->total_time;
-
-			/* make sure is_kernel_record() working correctly */
-			if (is_kernel_address(&fsess->sym_info, fstack->addr))
-				task->rstack = &task->kstack;
-			else
-				task->rstack = &task->ustack;
-
-			task->rstack->time = last_time;
-			task->rstack->type = UFTRACE_EXIT;
-			task->rstack->addr = fstack->addr;
-			task->rstack->more = 0;
-
-			if (!check_task_rstack(task, opts))
-				continue;
-
-			if (task->rstack->type == UFTRACE_EVENT)
-				dump_replay_event(ops, task);
-			else
-				dump_replay_func(ops, task, opts);
-
-			fstack_check_filter_done(task);
-		}
-	}
+	dump_replay_func_emit_remaining_exits(ops, opts, handle);
 
 	ops->footer(ops, handle, opts);
 }
