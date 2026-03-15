@@ -1635,6 +1635,8 @@ out:
  * This function returns current ftrace record of @idx-th task from
  * data file in @handle.
  */
+static void fstack_account_time(struct uftrace_task_reader *task);
+
 static struct uftrace_record *get_task_ustack(struct uftrace_data *handle, int idx)
 {
 	struct uftrace_task_reader *task;
@@ -1676,7 +1678,57 @@ static struct uftrace_record *get_task_ustack(struct uftrace_data *handle, int i
 			    curr->type == UFTRACE_ENTRY && task->func_stack &&
 			    curr->depth < handle->hdr.max_stack)
 				task->func_stack[curr->depth].addr = curr->addr;
+
+			/*
+			 * When an EXIT record falls outside (after) the time
+			 * range, its paired ENTRY may already be in rstack_list
+			 * (the ENTRY was in-range).  Apply the caller filter now
+			 * so that functions not matching -C are removed from the
+			 * list, just as they would be in the normal in-range
+			 * EXIT path.  Without this, -C filtered functions whose
+			 * EXIT is post-range would leak through as orphaned
+			 * events.
+			 */
+			if (handle->caller_filter && curr->type == UFTRACE_EXIT &&
+			    rstack_list->count > 0) {
+				sess = find_task_session(sessions, task->t, curr->time);
+				if (sess)
+					uftrace_match_filter(curr->addr, &sess->filter_info, &tr);
+
+				if (!(tr.flags & TRIGGER_FL_CALLER)) {
+					struct uftrace_rstack_list_node *last;
+					int last_type;
+
+					do {
+						last = list_last_entry(&rstack_list->read,
+								       typeof(*last), list);
+						last_type = last->rstack.type;
+						delete_last_rstack_list(rstack_list);
+					} while (last_type != UFTRACE_ENTRY &&
+						 rstack_list->count > 0);
+				}
+			}
 			continue;
+		}
+
+		/*
+		 * Initialize fstack state on the first in-range record, before
+		 * any caller filter may remove it from rstack_list.  Normally
+		 * fstack_account_time() runs in __fstack_consume() when the
+		 * record is consumed, but with -C the in-range record may be
+		 * deleted from rstack_list without ever being returned.
+		 * Calling here ensures stack_count and func_stack flags are
+		 * set up correctly for the remaining-functions loop.
+		 * fstack_account_time() guards itself with !task->fstack_set,
+		 * so the call in __fstack_consume() becomes a no-op.
+		 */
+		if (!task->fstack_set) {
+			struct uftrace_record *saved_rstack = task->rstack;
+
+			task->rstack = curr;
+			fstack_account_time(task);
+			task->rstack = saved_rstack;
+			task->timestamp_last = curr->time;
 		}
 
 		sess = find_task_session(sessions, task->t, curr->time);
@@ -1910,8 +1962,8 @@ static bool convert_perf_event(struct uftrace_task_reader *task, struct uftrace_
  * fstack_entry() is never called for them.  This function mirrors what
  * fstack_entry() would have done: it walks the pre-range frames whose
  * addresses were saved by get_task_ustack() and updates in_count / out_count
- * and the per-frame FSTACK_FL_* flags so that filters like -F work correctly
- * for functions called within the time range.
+ * and the per-frame FSTACK_FL_* flags so that filters like -F, -N, -C, and
+ * -H work correctly for functions called within the time range.
  */
 static void apply_existing_fstack_filter(struct uftrace_task_reader *task,
 					 struct uftrace_record *rstack)
@@ -1919,6 +1971,7 @@ static void apply_existing_fstack_filter(struct uftrace_task_reader *task,
 	struct uftrace_session_link *sessions = &task->h->sessions;
 	struct uftrace_fstack *fstack;
 	struct uftrace_session *sess;
+	bool caller_found = false;
 	int i;
 
 	sess = find_task_session(sessions, task->t, rstack->time);
@@ -1931,6 +1984,16 @@ static void apply_existing_fstack_filter(struct uftrace_task_reader *task,
 		fstack = fstack_get(task, i);
 		if (fstack == NULL || fstack->addr == 0)
 			continue;
+
+		/*
+		 * Propagate notrace (-N): once a frame increments out_count,
+		 * all deeper frames must be hidden too, mirroring the
+		 * out_count > 0 check in fstack_entry().
+		 */
+		if (task->filter.out_count > 0) {
+			fstack->flags |= FSTACK_FL_NORECORD;
+			continue;
+		}
 
 		uftrace_match_filter(fstack->addr, &sess->filter_info, &tr);
 
@@ -1947,6 +2010,32 @@ static void apply_existing_fstack_filter(struct uftrace_task_reader *task,
 		else if (fstack_get_filter_mode() == FILTER_MODE_IN && task->filter.in_count == 0) {
 			fstack->flags |= FSTACK_FL_NORECORD;
 		}
+
+		if (tr.flags & TRIGGER_FL_HIDE)
+			fstack->flags |= FSTACK_FL_NORECORD;
+
+		/*
+		 * For caller filter (-C): once the target function is seen,
+		 * all deeper frames are callees and must not be recorded.
+		 */
+		if (tr.flags & TRIGGER_FL_CALLER)
+			caller_found = true;
+		else if (caller_found)
+			fstack->flags |= FSTACK_FL_NORECORD;
+	}
+
+	/*
+	 * When fstack_account_time() is called early from get_task_ustack()
+	 * for a first in-range ENTRY record, that function's slot is stored at
+	 * func_stack[stack_count] (see UFTRACE_ENTRY block below).  Apply
+	 * caller_found logic to it too: if the -C target was already found in
+	 * the pre-range frames, this in-range function is a callee and must not
+	 * be recorded.
+	 */
+	if (task->h->caller_filter && rstack->type == UFTRACE_ENTRY && caller_found) {
+		fstack = fstack_get(task, task->stack_count);
+		if (fstack != NULL)
+			fstack->flags |= FSTACK_FL_NORECORD;
 	}
 }
 
