@@ -325,6 +325,9 @@ int main(int argc, char *argv[])
 	int c;
 	bool color_set = false;
 
+	/* unit tests should not access remote debuginfod servers */
+	unsetenv("DEBUGINFOD_URLS");
+
 	while ((c = getopt(argc, argv, "dvnpiO:f:-:")) != -1) {
 		switch (c) {
 		case 'd':

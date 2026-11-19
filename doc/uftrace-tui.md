@@ -102,6 +102,14 @@ COMMON OPTIONS
     binary.  This can be useful to deal with stripped binaries.  The file name
     of the main binary should be the same when saved and used.
 
+\--debuginfod
+:   Download debug info from the remote debuginfod servers listed in the
+    `DEBUGINFOD_URLS` environment variable.  Remote lookups are disabled by
+    default because they can make uftrace wait for a long time.  When enabled,
+    each request is limited to 10 seconds for connection and 60 seconds in
+    total without retries, unless `DEBUGINFOD_TIMEOUT`, `DEBUGINFOD_MAXTIME` or
+    `DEBUGINFOD_RETRY_LIMIT` is set.
+
 
 COMMON ANALYSIS OPTIONS
 =======================

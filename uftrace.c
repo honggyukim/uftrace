@@ -109,6 +109,7 @@ enum uftrace_short_options {
 	OPT_mermaid,
 	OPT_library_path,
 	OPT_loc_filter,
+	OPT_debuginfod,
 };
 
 /* clang-format off */
@@ -176,6 +177,9 @@ static const struct uftrace_help_entry uftrace_help[] = {
 	  "Use this DATA instead of uftrace.data" },
 	{ CMD_ALL, 0, "debug-domain", "DOMAIN",
 	  "Filter debugging domain" },
+	{ CMD_ALL_BUT_INFO_RECV, 0, "debuginfod", NULL,
+	  "Download debug info from remote debuginfod servers\n"
+	  "(default: off)" },
 	{ CMD_REPLAY | CMD_LIVE | CMD_REPORT | CMD_DUMP | CMD_GRAPH | CMD_SCRIPT | CMD_TUI, 0, "demangle", "TYPE",
 	  "C++ symbol demangling: full, simple, no\n"
 	  "(default: simple)" },
@@ -410,6 +414,7 @@ static const struct option uftrace_options[] = {
 	NO_ARG(debug, 'v'),
 	NO_ARG(verbose, 'v'),
 	REQ_ARG(debug-domain, OPT_dbg_domain),
+	NO_ARG(debuginfod, OPT_debuginfod),
 	NO_ARG(force, OPT_force),
 	REQ_ARG(data, 'd'),
 	NO_ARG(flat, OPT_flat),
@@ -1250,6 +1255,10 @@ static int parse_option(struct uftrace_opts *opts, int key, char *arg)
 		opts->srcline = true;
 		break;
 
+	case OPT_debuginfod:
+		opts->debuginfod = true;
+		break;
+
 	case OPT_with_syms:
 		opts->with_syms = arg;
 		break;
@@ -1625,6 +1634,32 @@ __used static void apply_default_opts(int *argc, char ***argv, struct uftrace_op
 	}
 }
 
+/*
+ * libdwfl honors DEBUGINFOD_URLS and may wait for a remote debuginfod server
+ * while loading debug info.  Disable it by default since the wait is not what
+ * users normally expect, and let --debuginfod enable it explicitly.
+ */
+__used static void setup_debuginfod(struct uftrace_opts *opts)
+{
+	const char *urls;
+
+	if (!opts->debuginfod) {
+		unsetenv("DEBUGINFOD_URLS");
+		return;
+	}
+
+	urls = getenv("DEBUGINFOD_URLS");
+	if (urls == NULL || *urls == '\0') {
+		pr_warn("--debuginfod is given but DEBUGINFOD_URLS is not set\n");
+		return;
+	}
+
+	/* bound each request not to be stalled by a slow server */
+	setenv("DEBUGINFOD_TIMEOUT", "10", 0);
+	setenv("DEBUGINFOD_MAXTIME", "60", 0);
+	setenv("DEBUGINFOD_RETRY_LIMIT", "0", 0);
+}
+
 /* print the brief usage with the command list (no options) */
 __used static void print_usage(void)
 {
@@ -1842,8 +1877,7 @@ int main(int argc, char *argv[])
 	if (!opts.libcall && opts.nest_libcall)
 		pr_err_ns("cannot use --no-libcall and --nest-libcall options together\n");
 
-	/* disable debuginfo daemon to avoid unintended network delay */
-	unsetenv("DEBUGINFOD_URLS");
+	setup_debuginfod(&opts);
 
 	switch (opts.mode) {
 	case UFTRACE_MODE_RECORD:
@@ -2144,6 +2178,46 @@ TEST_CASE(option_parsing5)
 	TEST_STREQ(opts.filter, "main");
 	/* it should not update exename to "t-abc" */
 	TEST_STREQ(opts.exename, "hello");
+
+	free_opts(&opts);
+	return TEST_OK;
+}
+
+TEST_CASE(debuginfod_option)
+{
+	struct uftrace_opts opts = {
+		.mode = UFTRACE_MODE_INVALID,
+	};
+	char *argv[] = { "uftrace", "replay", "--debuginfod" };
+	int argc = ARRAY_SIZE(argv);
+
+	parse_options(argc, argv, &opts);
+	TEST_EQ(opts.debuginfod, true);
+
+	pr_dbg("check remote debuginfod is disabled by default\n");
+	setenv("DEBUGINFOD_URLS", "http://localhost:8002", 1);
+	opts.debuginfod = false;
+	setup_debuginfod(&opts);
+	TEST_EQ(getenv("DEBUGINFOD_URLS"), NULL);
+
+	pr_dbg("check --debuginfod keeps DEBUGINFOD_URLS\n");
+	setenv("DEBUGINFOD_URLS", "http://localhost:8002", 1);
+	opts.debuginfod = true;
+	setup_debuginfod(&opts);
+	TEST_STREQ(getenv("DEBUGINFOD_URLS"), "http://localhost:8002");
+	TEST_STREQ(getenv("DEBUGINFOD_TIMEOUT"), "10");
+	TEST_STREQ(getenv("DEBUGINFOD_MAXTIME"), "60");
+	TEST_STREQ(getenv("DEBUGINFOD_RETRY_LIMIT"), "0");
+
+	pr_dbg("check user-given timeout is not overridden\n");
+	setenv("DEBUGINFOD_TIMEOUT", "30", 1);
+	setup_debuginfod(&opts);
+	TEST_STREQ(getenv("DEBUGINFOD_TIMEOUT"), "30");
+
+	unsetenv("DEBUGINFOD_URLS");
+	unsetenv("DEBUGINFOD_TIMEOUT");
+	unsetenv("DEBUGINFOD_MAXTIME");
+	unsetenv("DEBUGINFOD_RETRY_LIMIT");
 
 	free_opts(&opts);
 	return TEST_OK;

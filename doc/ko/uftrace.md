@@ -151,6 +151,10 @@ uftrace-<*subcommand*> 메뉴얼 페이지에서 추가적인 정보를 확인�
 -C, \--caller-filter=*FUNC*
 :   FUNC의 호출자를 출력하는 필터를 설정한다.
 
+\--debuginfod
+:   `DEBUGINFOD_URLS` 에 설정된 원격 서버에서 debuginfo를 내려받는다
+    (기본값: 사용 안 함)
+
 \--demangle=*TYPE*
 :   C++ 심볼 디맹글링: full, simple, no
 :   (기본값: simple)

@@ -110,6 +110,13 @@ DUMP 옵션
     이는 심볼(symbol) 데이터가 제거된 바이너리 파일을 다루는데 유용하다.
     바이너리 파일 이름은 저장할 때와 사용할 때 동일해야 한다.
 
+\--debuginfod
+:   `DEBUGINFOD_URLS` 에 설정된 원격 debuginfod 서버에서 debuginfo를 내려받는다.
+    응답이 느린 서버로 인해 오래 기다리는 일을 막기 위해 기본적으로 사용하지
+    않으며, 사용하는 경우 `DEBUGINFOD_TIMEOUT`, `DEBUGINFOD_MAXTIME`,
+    `DEBUGINFOD_RETRY_LIMIT` 을 설정하지 않았다면 연결에 10초, 전체 다운로드에
+    60초로 제한하고 재시도하지 않는다.
+
 
 공통 분석 옵션
 =======================

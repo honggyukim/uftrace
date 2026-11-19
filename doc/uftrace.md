@@ -165,6 +165,10 @@ The manual for *uftrace-live*(1) is special: The subcommand `live` does
 -C, \--caller-filter=*FUNC*
 :   Only trace callers of those FUNCs
 
+\--debuginfod
+:   Download debug info from the remote servers in `DEBUGINFOD_URLS`
+    (default: off)
+
 \--demangle=*TYPE*
 :   C++ symbol demangling: full, simple, no
 :   (default: simple)
